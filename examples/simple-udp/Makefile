@@ -1,4 +1,4 @@
-# Copyright 2017 Google LLC All Rights Reserved.
+# Copyright 2017 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@
 #     \_/ \__,_|_|  |_|\__,_|_.__/|_|\___|___/
 #
 
-REPOSITORY = gcr.io/agones-images
+REPOSITORY = gcr.io/agones-scale-test-1
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 project_path := $(dir $(mkfile_path))
-server_tag = $(REPOSITORY)/udp-server:0.11
+server_tag = $(REPOSITORY)/udp-server:0.9
 root_path = $(realpath $(project_path)/../..)
 
 #   _____                    _
