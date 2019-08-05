@@ -76,6 +76,33 @@ func New(kubeconfig string) (*Framework, error) {
 	}, nil
 }
 
+// NewForLoadTesting setups a testing framework using a kubeconfig path and the game server image
+// to use for load testing with QPS and Burst overwrites.
+func NewForLoadTesting(kubeconfig string, qps float32, burst int) (*Framework, error) {
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, errors.Wrap(err, "build config from flags failed")
+	}
+
+	config.QPS = qps
+	config.Burst = burst
+
+	kubeClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, errors.Wrap(err, "creating new kube-client failed")
+	}
+
+	agonesClient, err := versioned.NewForConfig(config)
+	if err != nil {
+		return nil, errors.Wrap(err, "creating new agones-client failed")
+	}
+
+	return &Framework{
+		KubeClient:   kubeClient,
+		AgonesClient: agonesClient,
+	}, nil
+}
+
 // CreateGameServerAndWaitUntilReady Creates a GameServer and wait for its state to become ready.
 func (f *Framework) CreateGameServerAndWaitUntilReady(ns string, gs *stable.GameServer) (*stable.GameServer, error) {
 	newGs, err := f.AgonesClient.StableV1alpha1().GameServers(ns).Create(gs)
