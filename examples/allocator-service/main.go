@@ -1,258 +1,184 @@
-// Copyright 2018 Google Inc. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// Package main is a very simple echo UDP server
 package main
 
 import (
 	"encoding/json"
 	"errors"
-	"flag"
-	"log"
-	"net"
-	"os"
-	"strconv"
-	"strings"
-	"time"
+	"io"
+	"net/http"
 
-	coresdk "agones.dev/agones/pkg/sdk"
-	"agones.dev/agones/pkg/util/signals"
-	sdk "agones.dev/agones/sdks/go"
+	"agones.dev/agones/pkg/apis/stable/v1alpha1"
+	"agones.dev/agones/pkg/client/clientset/versioned"
+	"agones.dev/agones/pkg/util/runtime" // for the logger
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 )
 
-var shutdownTimeout *int64
+// Constants which define the fleet and namespace we are using
+const namespace = "default"
+const fleetname = "simple-udp"
+const generatename = "simple-udp-"
 
-// main starts a UDP server that received 1024 byte sized packets at at time
-// converts the bytes to a string, and logs the output
+// Variables for the logger and Agones Clientset
+var (
+	logger       = runtime.NewLoggerWithSource("main")
+	agonesClient = getAgonesClient()
+)
+
+// A handler for the web server
+type handler func(w http.ResponseWriter, r *http.Request)
+
+// The structure of the json response
+type result struct {
+	Status v1alpha1.GameServerStatus `json:"status"`
+}
+
+// Main will set up an http server and three endpoints
 func main() {
-	go doSignal()
+	// Serve 200 status on / for k8s health checks
+	http.HandleFunc("/", handleRoot)
 
-	port := flag.String("port", "7654", "The port to listen to udp traffic on")
-	shutdownTimeout = flag.Int64("shutdownTimeout", 3, "Shutdown countdwon in minutes")
+	// Serve 200 status on /healthz for k8s health checks
+	http.HandleFunc("/healthz", handleHealthz)
 
-	flag.Parse()
-	if ep := os.Getenv("PORT"); ep != "" {
-		port = &ep
+	// Return the GameServerStatus of the allocated replica to the authorized client
+	http.HandleFunc("/address", getOnly(basicAuth(handleAddress)))
+
+	// Run the HTTP server using the bound certificate and key for TLS
+	if err := http.ListenAndServeTLS(":8000", "/home/service/certs/tls.crt", "/home/service/certs/tls.key", nil); err != nil {
+		logger.WithError(err).Fatal("HTTPS server failed to run")
+	} else {
+		logger.Info("HTTPS server is running on port 8000")
 	}
+}
 
-	log.Printf("Starting UDP server, listening on port %s", *port)
-	conn, err := net.ListenPacket("udp", ":"+*port)
+// Set up our client which we will use to call the API
+func getAgonesClient() *versioned.Clientset {
+	// Create the in-cluster config
+	config, err := rest.InClusterConfig()
 	if err != nil {
-		log.Fatalf("Could not start udp server: %v", err)
+		logger.WithError(err).Fatal("Could not create in cluster config")
 	}
-	defer conn.Close() // nolint: errcheck
 
-	log.Print("Creating SDK instance")
-	s, err := sdk.NewSDK()
+	// Access to the Agones resources through the Agones Clientset
+	agonesClient, err := versioned.NewForConfig(config)
 	if err != nil {
-		log.Fatalf("Could not connect to sdk: %v", err)
+		logger.WithError(err).Fatal("Could not create the agones api clientset")
+	} else {
+		logger.Info("Created the agones api clientset")
 	}
-
-	log.Print("Starting Health Ping")
-	stop := make(chan struct{})
-	go doHealth(s, stop)
-
-	log.Print("Marking this server as ready")
-	// This tells Agones that the server is ready to receive connections.
-	err = s.Ready()
-	if err != nil {
-		log.Fatalf("Could not send ready message")
-	}
-
-	watchGameServerEvents(s)
-	readWriteLoop(conn, stop, s)
+	return agonesClient
 }
 
-// doSignal shutsdown on SIGTERM/SIGKILL
-func doSignal() {
-	stop := signals.NewStopChannel()
-	<-stop
-	log.Println("Exit signal received. Shutting down.")
-	os.Exit(0)
-}
-
-func readWriteLoop(conn net.PacketConn, stop chan struct{}, s *sdk.SDK) {
-	b := make([]byte, 1024)
-	for {
-		sender, txt := readPacket(conn, b)
-		parts := strings.Split(strings.TrimSpace(txt), " ")
-
-		switch parts[0] {
-		// shuts down the gameserver
-		case "EXIT":
-			// respond here, as we os.Exit() before we get to below
-			respond(conn, sender, "ACK: "+txt+"\n")
-			exit(s)
-
-		// turns off the health pings
-		case "UNHEALTHY":
-			close(stop)
-
-		case "GAMESERVER":
-			writeGameServerName(s, conn, sender)
-
-		case "ALLOCATE":
-			allocate(s)
-
-		case "WATCH":
-			watchGameServerEvents(s)
-
-		case "LABEL":
-			switch len(parts) {
-			case 1:
-				// legacy format
-				setLabel(s, "timestamp", strconv.FormatInt(time.Now().Unix(), 10))
-			case 3:
-				setLabel(s, parts[1], parts[2])
-			default:
-				respond(conn, sender, "ERROR: Invalid LABEL command, must use zero or 2 arguments")
-				continue
-			}
-
-		case "ANNOTATION":
-			switch len(parts) {
-			case 1:
-				// legacy format
-				setAnnotation(s, "timestamp", time.Now().UTC().String())
-			case 3:
-				setAnnotation(s, parts[1], parts[2])
-			default:
-				respond(conn, sender, "ERROR: Invalid ANNOTATION command, must use zero or 2 arguments\n")
-				continue
-			}
-		}
-
-		respond(conn, sender, "ACK: "+txt+"\n")
-	}
-}
-
-// allocate attemps to allocate this gameserver
-func allocate(s *sdk.SDK) {
-	err := s.Allocate()
-	if err != nil {
-		log.Fatalf("could not allocate gameserver: %v", err)
-	}
-}
-
-// readPacket reads a string from the connection
-func readPacket(conn net.PacketConn, b []byte) (net.Addr, string) {
-	n, sender, err := conn.ReadFrom(b)
-	if err != nil {
-		log.Fatalf("Could not read from udp stream: %v", err)
-	}
-	txt := strings.TrimSpace(string(b[:n]))
-	log.Printf("Received packet from %v: %v", sender.String(), txt)
-	return sender, txt
-}
-
-// respond responds to a given sender.
-func respond(conn net.PacketConn, sender net.Addr, txt string) {
-	if _, err := conn.WriteTo([]byte(txt), sender); err != nil {
-		log.Fatalf("Could not write to udp stream: %v", err)
-	}
-}
-
-// exit shutdowns the server
-func exit(s *sdk.SDK) {
-	log.Printf("Received EXIT command. Exiting.")
-	// This tells Agones to shutdown this Game Server
-	shutdownErr := s.Shutdown()
-	if shutdownErr != nil {
-		log.Printf("Could not shutdown")
-	}
-	os.Exit(0)
-}
-
-// writes the GameServer name to the connection UDP stream
-func writeGameServerName(s *sdk.SDK, conn net.PacketConn, sender net.Addr) {
-	var gs *coresdk.GameServer
-	gs, err := s.GameServer()
-	if err != nil {
-		log.Fatalf("Could not retrieve GameServer: %v", err)
-	}
-	var j []byte
-	j, err = json.Marshal(gs)
-	if err != nil {
-		log.Fatalf("error mashalling GameServer to JSON: %v", err)
-	}
-	log.Printf("GameServer: %s \n", string(j))
-	msg := "NAME: " + gs.ObjectMeta.Name + "\n"
-	if _, err = conn.WriteTo([]byte(msg), sender); err != nil {
-		log.Fatalf("Could not write to udp stream: %v", err)
-	}
-}
-
-// watchGameServerEvents creates a callback to log when
-// gameserver events occur
-func watchGameServerEvents(s *sdk.SDK) {
-	err := s.WatchGameServer(func(gs *coresdk.GameServer) {
-		j, err := json.Marshal(gs)
-		if err != nil {
-			log.Fatalf("error mashalling GameServer to JSON: %v", err)
-		}
-		log.Printf("GameServer Event: %s \n", string(j))
-		if gs.Status.State == "Allocated" {
-			go func() {
-				shutdownErr := errors.New("Bogus Error")
-				for shutdownErr != nil {
-					time.Sleep(time.Duration(*shutdownTimeout) * time.Minute)
-					shutdownErr = s.Shutdown()
-					if shutdownErr != nil {
-						log.Printf("Could not shutdown")
-					}
-				}
-			}()
-		}
-
-	})
-	if err != nil {
-		log.Fatalf("Could not watch Game Server events, %v", err)
-	}
-}
-
-// setAnnotation sets a given annotation
-func setAnnotation(s *sdk.SDK, key, value string) {
-	log.Printf("Setting annotation %v=%v", key, value)
-	err := s.SetAnnotation(key, value)
-	if err != nil {
-		log.Fatalf("could not set annotation: %v", err)
-	}
-}
-
-// setLabel sets a given label
-func setLabel(s *sdk.SDK, key, value string) {
-	log.Printf("Setting label %v=%v", key, value)
-	// label values can only be alpha, - and .
-	err := s.SetLabel(key, value)
-	if err != nil {
-		log.Fatalf("could not set label: %v", err)
-	}
-}
-
-// doHealth sends the regular Health Pings
-func doHealth(sdk *sdk.SDK, stop <-chan struct{}) {
-	tick := time.Tick(2 * time.Second)
-	for {
-		err := sdk.Health()
-		if err != nil {
-			log.Fatalf("Could not send health ping, %v", err)
-		}
-		select {
-		case <-stop:
-			log.Print("Stopped health pings")
+// Limit verbs the web server handles
+func getOnly(h handler) handler {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			h(w, r)
 			return
-		case <-tick:
 		}
+		http.Error(w, "Get Only", http.StatusMethodNotAllowed)
 	}
+}
+
+// Let the web server do basic authentication
+func basicAuth(pass handler) handler {
+	return func(w http.ResponseWriter, r *http.Request) {
+		key, value, _ := r.BasicAuth()
+		if key != "v1GameClientKey" || value != "EAEC945C371B2EC361DE399C2F11E" {
+			http.Error(w, "authorization failed", http.StatusUnauthorized)
+			return
+		}
+		pass(w, r)
+	}
+}
+
+// Let / return Healthy and status code 200
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, err := io.WriteString(w, "Healthy")
+	if err != nil {
+		logger.WithError(err).Fatal("Error writing string Healthy from /")
+	}
+}
+
+// Let /healthz return Healthy and status code 200
+func handleHealthz(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, err := io.WriteString(w, "Healthy")
+	if err != nil {
+		logger.WithError(err).Fatal("Error writing string Healthy from /healthz")
+	}
+}
+
+// Let /address return the GameServerStatus
+func handleAddress(w http.ResponseWriter, r *http.Request) {
+	status, err := allocate()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	result, _ := json.Marshal(&result{status})
+	_, err = io.WriteString(w, string(result))
+	if err != nil {
+		logger.WithError(err).Fatal("Error writing json from /address")
+	}
+}
+
+// Return the number of ready game servers available to this fleet for allocation
+func checkReadyReplicas() int32 {
+	// Get a FleetInterface for this namespace
+	fleetInterface := agonesClient.StableV1alpha1().Fleets(namespace)
+	// Get our fleet
+	fleet, err := fleetInterface.Get(fleetname, v1.GetOptions{})
+	if err != nil {
+		logger.WithError(err).Info("Get fleet failed")
+	}
+
+	return fleet.Status.ReadyReplicas
+}
+
+// Move a replica from ready to allocated and return the GameServerStatus
+func allocate() (v1alpha1.GameServerStatus, error) {
+	var result v1alpha1.GameServerStatus
+
+	// Log the values used in the fleet allocation
+	logger.WithField("namespace", namespace).Info("namespace for fa")
+	logger.WithField("generatename", generatename).Info("generatename for fa")
+	logger.WithField("fleetname", fleetname).Info("fleetname for fa")
+
+	// Find out how many ready replicas the fleet has - we need at least one
+	readyReplicas := checkReadyReplicas()
+	logger.WithField("readyReplicas", readyReplicas).Info("numer of ready replicas")
+
+	// Log and return an error if there are no ready replicas
+	if readyReplicas < 1 {
+		logger.WithField("fleetname", fleetname).Info("Insufficient ready replicas, cannot create fleet allocation")
+		return result, errors.New("Insufficient ready replicas, cannot create fleet allocation")
+	}
+
+	// Get a FleetAllocationInterface for this namespace
+	fleetAllocationInterface := agonesClient.StableV1alpha1().FleetAllocations(namespace)
+
+	// Define the fleet allocation using the constants set earlier
+	fa := &v1alpha1.FleetAllocation{
+		ObjectMeta: v1.ObjectMeta{
+			GenerateName: generatename, Namespace: namespace,
+		},
+		Spec: v1alpha1.FleetAllocationSpec{FleetName: fleetname},
+	}
+
+	// Create a new fleet allocation
+	newFleetAllocation, err := fleetAllocationInterface.Create(fa)
+	if err != nil {
+		// Log and return the error if the call to Create fails
+		logger.WithError(err).Info("Failed to create fleet allocation")
+		return result, errors.New("Failed to ceate fleet allocation")
+	}
+
+	// Log the GameServer.Staus of the new allocation, then return those values
+	logger.Info("New GameServer allocated: ", newFleetAllocation.Status.GameServer.Status)
+	result = newFleetAllocation.Status.GameServer.Status
+	return result, nil
 }
