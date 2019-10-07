@@ -93,6 +93,7 @@ func newFramework(kubeconfig string, qps float32, burst int) (*Framework, error)
 	}
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	config.QPS = 1200
 	config.Burst = 1200
 =======
@@ -103,6 +104,10 @@ func newFramework(kubeconfig string, qps float32, burst int) (*Framework, error)
 		config.Burst = burst
 	}
 >>>>>>> 6176ee0d (Applied allocation test (#1417))
+=======
+	config.QPS = 1200
+	config.Burst = 1200
+>>>>>>> 0239c14f (add changes)
 
 	kubeClient, err := kubernetes.NewForConfig(config)
 	if err != nil {

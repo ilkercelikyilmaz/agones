@@ -41,6 +41,7 @@ func main() {
 
 	port := flag.String("port", "7654", "The port to listen to udp traffic on")
 <<<<<<< HEAD
+<<<<<<< HEAD
 	shutdownTimeout = flag.Int64("shutdownTimeout", 3, "Shutdown countdwon in minutes")
 
 =======
@@ -51,6 +52,10 @@ func main() {
 =======
 	shutdownDelay := flag.Int("automaticShutdownDelayMin", 0, "If greater than zero, automatically shut down the server this many minutes after the server becomes allocated")
 >>>>>>> 6176ee0d (Applied allocation test (#1417))
+=======
+	shutdownTimeout = flag.Int64("shutdownTimeout", 3, "Shutdown countdwon in minutes")
+
+>>>>>>> 0239c14f (add changes)
 	flag.Parse()
 	if ep := os.Getenv("PORT"); ep != "" {
 		port = &ep
@@ -92,6 +97,7 @@ func main() {
 	}
 	defer conn.Close() // nolint: errcheck
 
+<<<<<<< HEAD
 	if *readyOnStart {
 		log.Print("Marking this server as ready")
 		ready(s)
@@ -104,6 +110,9 @@ func main() {
 		shutdownAfterAllocation(s, *shutdownDelay)
 	}
 >>>>>>> 6176ee0d (Applied allocation test (#1417))
+=======
+	watchGameServerEvents(s)
+>>>>>>> 0239c14f (add changes)
 	readWriteLoop(conn, stop, s)
 }
 
