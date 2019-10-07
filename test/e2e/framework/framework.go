@@ -59,6 +59,9 @@ func New(kubeconfig string) (*Framework, error) {
 		return nil, errors.Wrap(err, "build config from flags failed")
 	}
 
+	config.QPS = 1200
+	config.Burst = 1200
+
 	kubeClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating new kube-client failed")

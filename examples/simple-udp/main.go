@@ -1,4 +1,4 @@
-// Copyright 2018 Google LLC All Rights Reserved.
+// Copyright 2018 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"log"
 	"net"
@@ -30,12 +31,16 @@ import (
 	sdk "agones.dev/agones/sdks/go"
 )
 
+var shutdownTimeout *int64
+
 // main starts a UDP server that received 1024 byte sized packets at at time
 // converts the bytes to a string, and logs the output
 func main() {
 	go doSignal()
 
 	port := flag.String("port", "7654", "The port to listen to udp traffic on")
+	shutdownTimeout = flag.Int64("shutdownTimeout", 3, "Shutdown countdwon in minutes")
+
 	flag.Parse()
 	if ep := os.Getenv("PORT"); ep != "" {
 		port = &ep
@@ -65,6 +70,7 @@ func main() {
 		log.Fatalf("Could not send ready message")
 	}
 
+	watchGameServerEvents(s)
 	readWriteLoop(conn, stop, s)
 }
 
@@ -196,6 +202,19 @@ func watchGameServerEvents(s *sdk.SDK) {
 			log.Fatalf("error mashalling GameServer to JSON: %v", err)
 		}
 		log.Printf("GameServer Event: %s \n", string(j))
+		if gs.Status.State == "Allocated" {
+			go func() {
+				shutdownErr := errors.New("Bogus Error")
+				for shutdownErr != nil {
+					time.Sleep(time.Duration(*shutdownTimeout) * time.Minute)
+					shutdownErr = s.Shutdown()
+					if shutdownErr != nil {
+						log.Printf("Could not shutdown")
+					}
+				}
+			}()
+		}
+
 	})
 	if err != nil {
 		log.Fatalf("Could not watch Game Server events, %v", err)
