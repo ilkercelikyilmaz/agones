@@ -11,7 +11,7 @@ Check the [Client SDK Documentation]({{< relref "_index.md" >}}) for more detail
 
 ## Download
 
-Download the source {{< ghlink href="sdks/nodejs" >}}directly from Github{{< /ghlink >}}.
+Download the source {{< ghlink href="sdks/nodejs" >}}directly from GitHub{{< /ghlink >}}.
 
 ## Prerequisites
 
@@ -28,12 +28,19 @@ Add the agones dependency to `package.json`, replacing with the download locatio
 }
 ```
 
-To begin working with the SDK, create an instance of it. This will open a connection to the SDK server.
+To begin working with the SDK, create an instance of it.
 
 ```javascript
 const AgonesSDK = require('agones');
 
 let agonesSDK = new AgonesSDK();
+```
+
+To connect to the SDK server, either local or when running on Agones, run the `async` method `sdk.connect()`, which will
+`resolve` once connected or `reject` on error or if no connection can be made after 30 seconds.
+
+```javascript
+await agonesSDK.connect();
 ```
 
 To send a [health check]({{< relref "_index.md#health" >}}) ping call `health()`.
@@ -48,7 +55,7 @@ To mark the game server as [ready to receive player connections]({{< relref "_in
 let result = await agonesSDK.ready();
 ```
 
-Similarly `shutdown()`, `setAnnotation(key, value)` and `setLabel(key, value)` are async methods that perform an action and return an empty result.
+Similarly `shutdown()`, `allocate()`, `setAnnotation(key, value)` and `setLabel(key, value)` are async methods that perform an action and return an empty result.
 
 To get [details of the backing GameServer]({{< relref "_index.md#gameserver" >}}) call the async method `getGameServer()`. The result will be an object representing `GameServer` defined in {{< ghlink href="sdk.proto" >}}`sdk.proto`{{< /ghlink >}}.
 
@@ -63,5 +70,7 @@ agonesSDK.watchGameServer((result) => {
 	console.log('watch', result);
 });
 ```
+
+To mark the game server as [reserved]({{< relref "_index.md#reserve-seconds" >}}) for a period of time, call the async method `reserve(seconds)`. The result will be an empty object.
 
 For more information, please read the [SDK Overview]({{< relref "_index.md" >}}), check out {{< ghlink href="sdks/nodejs/src/agonesSDK.js" >}}agonesSDK.js{{< /ghlink >}} and also look at the {{< ghlink href="examples/nodejs-simple" >}}Node.js example{{< / >}}.

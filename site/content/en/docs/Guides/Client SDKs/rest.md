@@ -8,9 +8,18 @@ description: "This is the REST version of the Agones Game Server Client SDK. "
 
 Check the [Client SDK Documentation]({{< relref "_index.md" >}}) for more details on each of the SDK functions and how to run the SDK locally.
 
-The REST API can be accessed from `http://localhost:59358/` from the game server process.
+The REST API can be accessed from `http://localhost:${AGONES_SDK_HTTP_PORT}/` from the game server process.
+`AGONES_SDK_HTTP_PORT` is an environment variable automatically set for the game server process by Agones to
+support binding the REST API to a dynamic port. It is advised to use the environment variable rather than a
+hard coded port; otherwise your game server will not be able to contact the SDK server if it is configured to
+use a non-default port.
 
 Generally the REST interface gets used if gRPC isn't well supported for a given language or platform.
+
+{{< alert title="Warning" color="warning">}}
+The SDK Server sidecar process may startup after your game server binary. So your REST SDK API calls should
+contain some retry logic to take this into account. 
+{{< /alert >}}
 
 ## Generating clients
 
@@ -37,7 +46,7 @@ Call when the GameServer is ready to accept connections
 #### Example
 
 ```bash
-$ curl -d "{}" -H "Content-Type: application/json" -X POST http://localhost:59358/ready
+$ curl -d "{}" -H "Content-Type: application/json" -X POST http://localhost:${AGONES_SDK_HTTP_PORT}/ready
 ```
 
 ### Health
@@ -50,7 +59,7 @@ Send a Empty every d Duration to declare that this GameSever is healthy
 #### Example
 
 ```bash
-$ curl -d "{}" -H "Content-Type: application/json" -X POST http://localhost:59358/health
+$ curl -d "{}" -H "Content-Type: application/json" -X POST http://localhost:${AGONES_SDK_HTTP_PORT}/health
 ```
 
 ### Shutdown
@@ -64,29 +73,29 @@ Call when the GameServer session is over and it's time to shut down
 #### Example
 
 ```bash
-$ curl -d "{}" -H "Content-Type: application/json" -X POST http://localhost:59358/shutdown
+$ curl -d "{}" -H "Content-Type: application/json" -X POST http://localhost:${AGONES_SDK_HTTP_PORT}/shutdown
 ```
 
 ### Set Label
 
-Apply a Label with the prefix "stable.agones.dev/sdk-" to the backing `GameServer` metadata. 
+Apply a Label with the prefix "agones.dev/sdk-" to the backing `GameServer` metadata. 
 
 See the SDK [SetLabel]({{< ref "/docs/Guides/Client SDKs/_index.md#setlabel-key-value" >}}) documentation for restrictions.
 
 #### Example
 
 ```bash
-$ curl -d '{"key": "foo", "value": "bar"}' -H "Content-Type: application/json" -X PUT http://localhost:59358/metadata/label
+$ curl -d '{"key": "foo", "value": "bar"}' -H "Content-Type: application/json" -X PUT http://localhost:${AGONES_SDK_HTTP_PORT}/metadata/label
 ```
 
 ### Set Annotation
 
-Apply a Annotation with the prefix "stable.agones.dev/sdk-" to the backing `GameServer` metadata
+Apply a Annotation with the prefix "agones.dev/sdk-" to the backing `GameServer` metadata
 
 #### Example
 
 ```bash
-$ curl -d '{"key": "foo", "value": "bar"}' -H "Content-Type: application/json" -X PUT http://localhost:59358/metadata/annotation
+$ curl -d '{"key": "foo", "value": "bar"}' -H "Content-Type: application/json" -X PUT http://localhost:${AGONES_SDK_HTTP_PORT}/metadata/annotation
 ```
 
 ### GameServer
@@ -97,7 +106,7 @@ Call when you want to retrieve the backing `GameServer` configuration details
 - Method: `GET`
 
 ```bash
-$ curl -H "Content-Type: application/json" -X GET http://localhost:59358/gameserver
+$ curl -H "Content-Type: application/json" -X GET http://localhost:${AGONES_SDK_HTTP_PORT}/gameserver
 ```
 
 Response:
@@ -139,7 +148,7 @@ want to keep the http connection open, and read lines from the result stream and
 come in.
 
 ```bash
-$ curl -H "Content-Type: application/json" -X GET http://localhost:59358/watch/gameserver
+$ curl -H "Content-Type: application/json" -X GET http://localhost:${AGONES_SDK_HTTP_PORT}/watch/gameserver
 ```
 
 Response:
@@ -149,17 +158,33 @@ Response:
 {"result":{"object_meta":{"name":"local","namespace":"default","uid":"1234","resource_version":"v1","generation":"1","creation_timestamp":"1533766607","annotations":{"annotation":"true"},"labels":{"islocal":"true"}},"status":{"state":"Ready","address":"127.0.0.1","ports":[{"name":"default","port":7777}]}}}
 ```
 
+### Reserve
+
+Move Gameserver into a Reserved state for a certain amount of seconds for the future allocation.
+
+- Path: `/reserve`
+- Method: `POST`
+- Body: `{"seconds": "5"}`
+
+#### Example
+
+```bash
+$ curl -d '{"seconds": "5"}' -H "Content-Type: application/json" -X POST http://localhost:${AGONES_SDK_HTTP_PORT}/reserve
+```
+
 ### Allocate
 
 With some matchmakers and game matching strategies, it can be important for game servers to mark themselves as `Allocated`.
 For those scenarios, this SDK functionality exists. 
 
-> Note: Using a [GameServerAllocation]({{< ref "/docs/Reference/fleet.md#gameserver-allocation-specification" >}}) is preferred in all other scenarios, 
+{{< alert title="Note" color="info">}}
+Using a [GameServerAllocation]({{< ref "/docs/Reference/gameserverallocation.md" >}}) is preferred in all other scenarios, 
 as it gives Agones control over how packed `GameServers` are scheduled within a cluster, whereas with `Allocate()` you
 relinquish control to an external service which likely doesn't have as much information as Agones.
+{{< /alert >}}
 
 #### Example
 
 ```bash
-$ curl -d "{}" -H "Content-Type: application/json" -X POST http://localhost:59358/allocate
+$ curl -d "{}" -H "Content-Type: application/json" -X POST http://localhost:${AGONES_SDK_HTTP_PORT}/allocate
 ```

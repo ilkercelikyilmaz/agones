@@ -39,19 +39,25 @@ func main() {
 	go doSignal()
 
 	port := flag.String("port", "7654", "The port to listen to udp traffic on")
+<<<<<<< HEAD
 	shutdownTimeout = flag.Int64("shutdownTimeout", 3, "Shutdown countdwon in minutes")
 
+=======
+	passthrough := flag.Bool("passthrough", false, "Get listening port from the SDK, rather than use the 'port' value")
+	readyOnStart := flag.Bool("ready", true, "Mark this GameServer as Ready on startup")
+>>>>>>> 35493671e40293e27aa5cab9263e4772ce175e9f
 	flag.Parse()
 	if ep := os.Getenv("PORT"); ep != "" {
 		port = &ep
 	}
-
-	log.Printf("Starting UDP server, listening on port %s", *port)
-	conn, err := net.ListenPacket("udp", ":"+*port)
-	if err != nil {
-		log.Fatalf("Could not start udp server: %v", err)
+	if epass := os.Getenv("PASSTHROUGH"); epass != "" {
+		p := strings.ToUpper(epass) == "TRUE"
+		passthrough = &p
 	}
-	defer conn.Close() // nolint: errcheck
+	if eready := os.Getenv("READY"); eready != "" {
+		r := strings.ToUpper(eready) == "TRUE"
+		readyOnStart = &r
+	}
 
 	log.Print("Creating SDK instance")
 	s, err := sdk.NewSDK()
@@ -63,11 +69,27 @@ func main() {
 	stop := make(chan struct{})
 	go doHealth(s, stop)
 
-	log.Print("Marking this server as ready")
-	// This tells Agones that the server is ready to receive connections.
-	err = s.Ready()
+	if *passthrough {
+		var gs *coresdk.GameServer
+		gs, err = s.GameServer()
+		if err != nil {
+			log.Fatalf("Could not get gameserver port details: %s", err)
+		}
+
+		p := strconv.FormatInt(int64(gs.Status.Ports[0].Port), 10)
+		port = &p
+	}
+
+	log.Printf("Starting UDP server, listening on port %s", *port)
+	conn, err := net.ListenPacket("udp", ":"+*port)
 	if err != nil {
-		log.Fatalf("Could not send ready message")
+		log.Fatalf("Could not start udp server: %v", err)
+	}
+	defer conn.Close() // nolint: errcheck
+
+	if *readyOnStart {
+		log.Print("Marking this server as ready")
+		ready(s)
 	}
 
 	watchGameServerEvents(s)
@@ -100,10 +122,16 @@ func readWriteLoop(conn net.PacketConn, stop chan struct{}, s *sdk.SDK) {
 			close(stop)
 
 		case "GAMESERVER":
-			writeGameServerName(s, conn, sender)
+			respond(conn, sender, gameServerName(s))
+
+		case "READY":
+			ready(s)
 
 		case "ALLOCATE":
 			allocate(s)
+
+		case "RESERVE":
+			reserve(s)
 
 		case "WATCH":
 			watchGameServerEvents(s)
@@ -119,6 +147,10 @@ func readWriteLoop(conn net.PacketConn, stop chan struct{}, s *sdk.SDK) {
 				respond(conn, sender, "ERROR: Invalid LABEL command, must use zero or 2 arguments")
 				continue
 			}
+
+		case "CRASH":
+			log.Print("Crashing.")
+			os.Exit(1)
 
 		case "ANNOTATION":
 			switch len(parts) {
@@ -137,11 +169,26 @@ func readWriteLoop(conn net.PacketConn, stop chan struct{}, s *sdk.SDK) {
 	}
 }
 
-// allocate attemps to allocate this gameserver
+// ready attempts to mark this gameserver as ready
+func ready(s *sdk.SDK) {
+	err := s.Ready()
+	if err != nil {
+		log.Fatalf("Could not send ready message")
+	}
+}
+
+// allocate attempts to allocate this gameserver
 func allocate(s *sdk.SDK) {
 	err := s.Allocate()
 	if err != nil {
 		log.Fatalf("could not allocate gameserver: %v", err)
+	}
+}
+
+// reserve for 10 seconds
+func reserve(s *sdk.SDK) {
+	if err := s.Reserve(10 * time.Second); err != nil {
+		log.Fatalf("could not reserve gameserver: %v", err)
 	}
 }
 
@@ -174,8 +221,8 @@ func exit(s *sdk.SDK) {
 	os.Exit(0)
 }
 
-// writes the GameServer name to the connection UDP stream
-func writeGameServerName(s *sdk.SDK, conn net.PacketConn, sender net.Addr) {
+// gameServerName returns the GameServer name
+func gameServerName(s *sdk.SDK) string {
 	var gs *coresdk.GameServer
 	gs, err := s.GameServer()
 	if err != nil {
@@ -187,10 +234,7 @@ func writeGameServerName(s *sdk.SDK, conn net.PacketConn, sender net.Addr) {
 		log.Fatalf("error mashalling GameServer to JSON: %v", err)
 	}
 	log.Printf("GameServer: %s \n", string(j))
-	msg := "NAME: " + gs.ObjectMeta.Name + "\n"
-	if _, err = conn.WriteTo([]byte(msg), sender); err != nil {
-		log.Fatalf("Could not write to udp stream: %v", err)
-	}
+	return "NAME: " + gs.ObjectMeta.Name + "\n"
 }
 
 // watchGameServerEvents creates a callback to log when

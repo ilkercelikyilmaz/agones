@@ -24,13 +24,12 @@ gcloud-init: ensure-build-config
 	docker run --rm -it $(common_mounts) $(build_tag) gcloud init
 
 # Creates and authenticates a small, 6 node GKE cluster to work against (2 nodes are used for agones-metrics and agones-system)
-gcloud-test-cluster: GCP_CLUSTER_LEGACYABAC ?= false
 gcloud-test-cluster: GCP_CLUSTER_NODEPOOL_INITIALNODECOUNT ?= 4
 gcloud-test-cluster: GCP_CLUSTER_NODEPOOL_MACHINETYPE ?= n1-standard-4
 gcloud-test-cluster: $(ensure-build-image)
 	docker run --rm -it $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) gcloud \
 		deployment-manager deployments create $(GCP_CLUSTER_NAME)  \
-		--properties cluster.zone:$(GCP_CLUSTER_ZONE),cluster.name:$(GCP_CLUSTER_NAME),cluster.nodePool.initialNodeCount:$(GCP_CLUSTER_NODEPOOL_INITIALNODECOUNT),cluster.nodePool.machineType:$(GCP_CLUSTER_NODEPOOL_MACHINETYPE),cluster.legacyAbac:$(GCP_CLUSTER_LEGACYABAC)\
+		--properties cluster.zone:$(GCP_CLUSTER_ZONE),cluster.name:$(GCP_CLUSTER_NAME),cluster.nodePool.initialNodeCount:$(GCP_CLUSTER_NODEPOOL_INITIALNODECOUNT),cluster.nodePool.machineType:$(GCP_CLUSTER_NODEPOOL_MACHINETYPE)\
 		--template=$(mount_path)/build/gke-test-cluster/cluster.yml.jinja
 	$(MAKE) gcloud-auth-cluster
 	$(MAKE) setup-test-cluster
@@ -45,7 +44,7 @@ gcloud-e2e-test-cluster: $(ensure-build-image)
 	docker run --rm -it $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) gcloud \
 		deployment-manager deployments create e2e-test-cluster \
 		--config=$(mount_path)/build/gke-test-cluster/cluster-e2e.yml
-	GCP_CLUSTER_NAME=e2e-test-cluster GCP_CLUSTER_ZONE=us-west1-c $(MAKE) gcloud-auth-cluster
+	$(MAKE) gcloud-auth-cluster GCP_CLUSTER_NAME=e2e-test-cluster GCP_CLUSTER_ZONE=us-west1-c
 	docker run --rm $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) \
 		kubectl apply -f $(mount_path)/build/helm.yaml
 	docker run --rm $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) \
@@ -55,9 +54,20 @@ gcloud-e2e-test-cluster: $(ensure-build-image)
 
 # Deletes the gcloud e2e cluster and cleanup any left pvc volumes
 clean-gcloud-e2e-test-cluster: $(ensure-build-image)
-	docker run --rm $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) \
+	-docker run --rm $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) \
 		helm delete --purge consul && kubectl delete pvc -l component=consul-consul
-	GCP_CLUSTER_NAME=e2e-test-cluster $(MAKE) clean-gcloud-test-cluster
+	$(MAKE) clean-gcloud-test-cluster GCP_CLUSTER_NAME=e2e-test-cluster
+
+# Creates a gcloud cluster for prow
+gcloud-prow-build-cluster: $(ensure-build-image)
+	docker run --rm -it $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) gcloud \
+		deployment-manager deployments create prow-build-cluster \
+		--config=$(mount_path)/build/gke-test-cluster/cluster-prow.yml
+	$(MAKE) gcloud-auth-cluster GCP_CLUSTER_NAME=prow-build-cluster GCP_CLUSTER_ZONE=us-west1-c
+
+# Deletes the gcloud prow build cluster
+clean-gcloud-prow-build-cluster: $(ensure-build-image)
+	$(MAKE) clean-gcloud-test-cluster GCP_CLUSTER_NAME=prow-build-cluster
 
 # Pulls down authentication information for kubectl against a cluster, name can be specified through GCP_CLUSTER_NAME
 # (defaults to 'test-cluster')
@@ -65,8 +75,6 @@ gcloud-auth-cluster: $(ensure-build-image)
 	docker run --rm $(common_mounts) $(build_tag) gcloud config set container/cluster $(GCP_CLUSTER_NAME)
 	docker run --rm $(common_mounts) $(build_tag) gcloud config set compute/zone $(GCP_CLUSTER_ZONE)
 	docker run --rm $(common_mounts) $(build_tag) gcloud container clusters get-credentials $(GCP_CLUSTER_NAME)
-	-docker run --rm $(common_mounts) $(build_tag) bash -c 'echo - n $$(gcloud config get-value account) | md5sum | cut -b-32 > /tmp/hash && \
-	kubectl create clusterrolebinding cluster-admin-binding-$$(cat /tmp/hash) --clusterrole cluster-admin --user $$(gcloud config get-value account)'
 
 # authenticate our docker configuration so that you can do a docker push directly
 # to the gcr.io repository

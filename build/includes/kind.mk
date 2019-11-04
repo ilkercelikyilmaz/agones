@@ -26,7 +26,7 @@ kind-test-cluster: DOCKER_RUN_ARGS+=--network=host
 kind-test-cluster: $(ensure-build-image)
 	@if [ -z $$(kind get clusters | grep $(KIND_PROFILE)) ]; then\
 		echo "Could not find $(KIND_PROFILE) cluster. Creating...";\
-		kind create cluster --name $(KIND_PROFILE) --image kindest/node:v1.11.3 --wait 5m;\
+		kind create cluster --name $(KIND_PROFILE) --image kindest/node:v1.12.9 --wait 5m;\
 	fi
 	$(MAKE) setup-test-cluster KUBECONFIG="$(shell kind get kubeconfig-path --name="$(KIND_PROFILE)")" DOCKER_RUN_ARGS="$(DOCKER_RUN_ARGS)"
 
@@ -44,20 +44,15 @@ kind-shell: $(ensure-build-image)
 # you should build-images and kind-push first.
 kind-install:
 	$(MAKE) install DOCKER_RUN_ARGS="--network=host" ALWAYS_PULL_SIDECAR=false \
-		IMAGE_PULL_POLICY=IfNotPresent PING_SERVICE_TYPE=NodePort \
+		IMAGE_PULL_POLICY=IfNotPresent PING_SERVICE_TYPE=NodePort ALLOCATOR_SERVICE_TYPE=NodePort\
 		KUBECONFIG="$(shell kind get kubeconfig-path --name="$(KIND_PROFILE)")"
 
 # pushses the current dev version of agones to the kind single node cluster.
 kind-push:
-	BUNDLE_FILE=$$(mktemp -d)/agones.tar.gz; \
-	docker save \
-		$(sidecar_tag) \
-		$(controller_tag) \
-		$(ping_tag) \
-		-o $$BUNDLE_FILE; \
-	docker cp $$BUNDLE_FILE $(KIND_CONTAINER_NAME):/agones.tar.gz; \
-	docker exec $(KIND_CONTAINER_NAME) docker load -i /agones.tar.gz; \
-	rm -f $$BUNDLE_FILE
+	kind load docker-image $(sidecar_tag) --name="$(KIND_PROFILE)"
+	kind load docker-image $(controller_tag) --name="$(KIND_PROFILE)"
+	kind load docker-image $(ping_tag) --name="$(KIND_PROFILE)"
+	kind load docker-image $(allocator_tag) --name="$(KIND_PROFILE)"
 
 # Runs e2e tests against our kind cluster
 kind-test-e2e:

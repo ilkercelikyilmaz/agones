@@ -16,7 +16,7 @@ Since Agones provides `GameServer` `Pods` with a sidecar container that needs ac
 
 Since service accounts apply to all containers in a `Pod`, Agones will automatically overwrite the mounted key for the 
 service account in the container that is running the dedicate game server in the backing `Pod`. This is done 
-since game server containers are exposed publicly, and generally dom't require the extra permissions to access aspects 
+since game server containers are exposed publicly, and generally don't require the extra permissions to access aspects 
 of the Kubernetes API.
 
 ## Bringing your own Service Account
@@ -26,7 +26,7 @@ If needed, you can provide your own service account on the `Pod` specification i
 For example:
 
 ```yaml
-apiVersion: "stable.agones.dev/v1alpha1"
+apiVersion: "agones.dev/v1"
 kind: GameServer
 metadata:
   generateName: "simple-udp-"
@@ -39,7 +39,7 @@ spec:
       serviceAccountName: my-special-service-account # a custom service account
       containers:
       - name: simple-udp
-        image: gcr.io/agones-images/udp-server:0.9
+        image: {{% example-image %}}
 ```
 
 If a service account is configured, the mounted key is not overwritten, as it assumed that you want to have full control

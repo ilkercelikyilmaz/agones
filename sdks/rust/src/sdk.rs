@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::env;
+use std::sync::{Arc, Mutex};
+use std::thread::sleep;
+use std::time::Duration;
+
 use futures::{Future, Sink, Stream};
 use grpcio;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use protobuf::Message;
 
 use errors::*;
 use grpc::sdk;
 use grpc::sdk_grpc;
-use protobuf::Message;
 use types::*;
-
-const PORT: i32 = 59357;
 
 /// SDK is an instance of the Agones SDK
 pub struct Sdk {
@@ -34,16 +35,34 @@ pub struct Sdk {
 impl Sdk {
     /// Starts a new SDK instance, and connects to localhost on port 59357.
     /// Blocks until connection and handshake are made.
-    /// Times out after 30 seconds.
+    /// Times out after ~30 seconds.
     pub fn new() -> Result<Sdk> {
-        let addr = format!("localhost:{}", PORT);
+        let port = env::var("AGONES_SDK_GRPC_PORT").unwrap_or("59357".to_string());
+        let addr = format!("localhost:{}", port);
         let env = Arc::new(grpcio::EnvBuilder::new().build());
         let ch = grpcio::ChannelBuilder::new(env)
             .keepalive_timeout(Duration::new(30, 0))
             .connect(&addr);
         let cli = sdk_grpc::SdkClient::new(ch);
         let req = sdk::Empty::new();
-        let _ = cli.ready(&req).map(Box::new)?;
+
+        // Unfortunately there isn't a native way to block until connected
+        // so we had to roll our own.
+        let mut counter = 0;
+        loop {
+            counter += 1;
+            match cli.get_game_server(&req) {
+                Ok(_) => break,
+                Err(e) => {
+                    if counter > 30 {
+                        return Err(ErrorKind::Grpc(e).into());
+                    }
+                    sleep(Duration::from_secs(1));
+                    continue;
+                }
+            }
+        }
+
         let (sender, _) = cli.health()?;
         Ok(Sdk {
             client: Arc::new(cli),
@@ -55,6 +74,13 @@ impl Sdk {
     pub fn ready(&self) -> Result<()> {
         let req = sdk::Empty::default_instance();
         let res = self.client.ready(req).map(|_| ())?;
+        Ok(res)
+    }
+
+    /// Allocate the Game Server
+    pub fn allocate(&self) -> Result<()> {
+        let req = sdk::Empty::default_instance();
+        let res = self.client.allocate(req).map(|_| ())?;
         Ok(res)
     }
 
@@ -121,6 +147,17 @@ impl Sdk {
             .client
             .get_game_server(&req)
             .map(|e| GameServer::from_message(e))?;
+        Ok(res)
+    }
+
+    /// Reserve marks the Game Server as Reserved for a given duration, at which point
+    /// it will return the GameServer to a Ready state.
+    /// Do note, the smallest unit available in the time.Duration argument is a second.
+    pub fn reserve(&self, duration: Duration) -> Result<()> {
+        let mut d = sdk::Duration::new();
+        d.set_seconds(duration.as_secs() as i64);
+
+        let res = self.client.reserve(&d).map(|_| ())?;
         Ok(res)
     }
 

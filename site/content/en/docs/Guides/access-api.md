@@ -56,12 +56,17 @@ package main
 import (
 	"fmt"
 
-	"agones.dev/agones/pkg/apis/stable/v1alpha1"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
+	"agones.dev/agones/pkg/util/runtime" // for the logger
 	"agones.dev/agones/pkg/client/clientset/versioned"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/kubernetes"
+)
+
+var (
+	logger = runtime.NewLoggerWithSource("main")
 )
 
 func main() {
@@ -86,23 +91,22 @@ func main() {
 	}
 
 	// Create a GameServer
-	gs := &v1alpha1.GameServer{ObjectMeta: metav1.ObjectMeta{GenerateName: "udp-server", Namespace: "default"},
-		Spec: v1alpha1.GameServerSpec{
+	gs := &agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{GenerateName: "udp-server", Namespace: "default"},
+		Spec: agonesv1.GameServerSpec{
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{Name: "udp-server", Image: "gcr.io/agones-images/udp-server:0.9"}},
+					Containers: []corev1.Container{{Name: "udp-server", Image: "{{% example-image %}}"}},
 				},
 			},
 		},
 	}
-	newGS, err := agonesClient.StableV1alpha1().GameServers("default").Create(gs)
+	newGS, err := agonesClient.AgonesV1().GameServers("default").Create(gs)
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("New game servers' name is: %s", newGS.ObjectMeta.Name)
 }
-
 ```
 
 ## Direct Access to the REST API via Kubectl
@@ -124,27 +128,27 @@ Starting to serve on 127.0.0.1:8001
 $ curl http://localhost:8001/apis | grep agones -A 5 -B 5
 ...
     {
-      "name": "stable.agones.dev",
+      "name": "agones.dev",
       "versions": [
         {
-          "groupVersion": "stable.agones.dev/v1alpha1",
-          "version": "v1alpha1"
+          "groupVersion": "agones.dev/v1",
+          "version": "v1"
         }
       ],
       "preferredVersion": {
-        "groupVersion": "stable.agones.dev/v1alpha1",
-        "version": "v1alpha1"
+        "groupVersion": "agones.dev/v1",
+        "version": "v1"
       },
       "serverAddressByClientCIDRs": null
     }
 ...
 
 # List Agones resources
-$ curl http://localhost:8001/apis/stable.agones.dev/v1alpha1
+$ curl http://localhost:8001/apis/agones.dev/v1
 {
   "kind": "APIResourceList",
   "apiVersion": "v1",
-  "groupVersion": "stable.agones.dev/v1alpha1",
+  "groupVersion": "agones.dev/v1",
   "resources": [
     {
       "name": "gameservers",
@@ -168,28 +172,28 @@ $ curl http://localhost:8001/apis/stable.agones.dev/v1alpha1
   ]
 }
 
-# list all gameservers in the default namesace
-$ curl http://localhost:8001/apis/stable.agones.dev/v1alpha1/namespaces/default/gameservers
+# list all gameservers in the default namespace
+$ curl http://localhost:8001/apis/agones.dev/v1/namespaces/default/gameservers
 {
-    "apiVersion": "stable.agones.dev/v1alpha1",
+    "apiVersion": "agones.dev/v1",
     "items": [
         {
-            "apiVersion": "stable.agones.dev/v1alpha1",
+            "apiVersion": "agones.dev/v1",
             "kind": "GameServer",
             "metadata": {
                 "annotations": {
-                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"stable.agones.dev/v1alpha1\",\"kind\":\"GameServer\",\"metadata\":{\"annotations\":{},\"name\":\"simple-udp\",\"namespace\":\"default\"},\"spec\":{\"containerPort\":7654,\"hostPort\":7777,\"portPolicy\":\"static\",\"template\":{\"spec\":{\"containers\":[{\"image\":\"gcr.io/agones-images/udp-server:0.9\",\"name\":\"simple-udp\"}]}}}}\n"
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"agones.dev/v1\",\"kind\":\"GameServer\",\"metadata\":{\"annotations\":{},\"name\":\"simple-udp\",\"namespace\":\"default\"},\"spec\":{\"containerPort\":7654,\"hostPort\":7777,\"portPolicy\":\"static\",\"template\":{\"spec\":{\"containers\":[{\"image\":\"{{% example-image %}}\",\"name\":\"simple-udp\"}]}}}}\n"
                 },
                 "clusterName": "",
                 "creationTimestamp": "2018-03-02T21:41:05Z",
                 "finalizers": [
-                    "stable.agones.dev"
+                    "agones.dev"
                 ],
                 "generation": 0,
                 "name": "simple-udp",
                 "namespace": "default",
                 "resourceVersion": "760",
-                "selfLink": "/apis/stable.agones.dev/v1alpha1/namespaces/default/gameservers/simple-udp",
+                "selfLink": "/apis/agones.dev/v1/namespaces/default/gameservers/simple-udp",
                 "uid": "692beea6-1e62-11e8-beb2-080027637781"
             },
             "spec": {
@@ -210,7 +214,7 @@ $ curl http://localhost:8001/apis/stable.agones.dev/v1alpha1/namespaces/default/
                     "spec": {
                         "containers": [
                             {
-                                "image": "gcr.io/agones-images/udp-server:0.9",
+                                "image": "{{% example-image %}}",
                                 "name": "simple-udp",
                                 "resources": {}
                             }
@@ -230,120 +234,52 @@ $ curl http://localhost:8001/apis/stable.agones.dev/v1alpha1/namespaces/default/
     "metadata": {
         "continue": "",
         "resourceVersion": "1062",
-        "selfLink": "/apis/stable.agones.dev/v1alpha1/namespaces/default/gameservers"
+        "selfLink": "/apis/agones.dev/v1/namespaces/default/gameservers"
     }
 }
 
-# allocate a gameserver from a fleet named 'simple-udp'
+# allocate a gameserver from a fleet named 'simple-udp', with GameServerAllocation
 
-$ curl -d '{"apiVersion":"stable.agones.dev/v1alpha1","kind":"FleetAllocation","metadata":{"generateName":"simple-udp-", "namespace": "default"},"spec":{"fleetName":"simple-udp"}}' -H "Content-Type: application/json" -X POST http://localhost:8001/apis/stable.agones.dev/v1alpha1/namespaces/default/fleetallocations
+$ curl -d '{"apiVersion":"allocation.agones.dev/v1","kind":"GameServerAllocation","spec":{"required":{"matchLabels":{"agones.dev/fleet":"simple-udp"}}}}' -H "Content-Type: application/json" -X POST http://localhost:8001/apis/allocation.agones.dev/v1/namespaces/default/gameserverallocations
 
 {
-    "apiVersion": "stable.agones.dev/v1alpha1",
-    "kind": "FleetAllocation",
+    "kind": "GameServerAllocation",
+    "apiVersion": "allocation.agones.dev/v1",
     "metadata": {
-        "clusterName": "",
-        "creationTimestamp": "2018-08-22T17:08:30Z",
-        "generateName": "simple-udp-",
-        "generation": 1,
-        "name": "simple-udp-4xsrl",
+        "name": "simple-udp-v6jwb-cmdcv",
         "namespace": "default",
-        "ownerReferences": [
-            {
-                "apiVersion": "stable.agones.dev/v1alpha1",
-                "blockOwnerDeletion": true,
-                "controller": true,
-                "kind": "GameServer",
-                "name": "simple-udp-296d5-4qcds",
-                "uid": "99832e51-a62b-11e8-b7bb-bc2623b75dea"
-            }
-        ],
-        "resourceVersion": "1228",
-        "selfLink": "/apis/stable.agones.dev/v1alpha1/namespaces/default/fleetallocations/simple-udp-4xsrl",
-        "uid": "fe8717ae-a62d-11e8-b7bb-bc2623b75dea"
+        "creationTimestamp": "2019-07-03T17:19:47Z"
     },
     "spec": {
-        "fleetName": "simple-udp",
+        "multiClusterSetting": {
+            "policySelector": {}
+        },
+        "required": {
+            "matchLabels": {
+                "agones.dev/fleet": "simple-udp"
+            }
+        },
+        "scheduling": "Packed",
         "metadata": {}
     },
     "status": {
-        "GameServer": {
-            "metadata": {
-                "creationTimestamp": "2018-08-22T16:51:22Z",
-                "finalizers": [
-                    "stable.agones.dev"
-                ],
-                "generateName": "simple-udp-296d5-",
-                "generation": 1,
-                "labels": {
-                    "stable.agones.dev/gameserverset": "simple-udp-296d5"
-                },
-                "name": "simple-udp-296d5-4qcds",
-                "namespace": "default",
-                "ownerReferences": [
-                    {
-                        "apiVersion": "stable.agones.dev/v1alpha1",
-                        "blockOwnerDeletion": true,
-                        "controller": true,
-                        "kind": "GameServerSet",
-                        "name": "simple-udp-296d5",
-                        "uid": "9980351b-a62b-11e8-b7bb-bc2623b75dea"
-                    }
-                ],
-                "resourceVersion": "1225",
-                "selfLink": "/apis/stable.agones.dev/v1alpha1/namespaces/default/gameservers/simple-udp-296d5-4qcds",
-                "uid": "99832e51-a62b-11e8-b7bb-bc2623b75dea"
-            },
-            "spec": {
-                "container": "simple-udp",
-                "health": {
-                    "failureThreshold": 3,
-                    "initialDelaySeconds": 5,
-                    "periodSeconds": 5
-                },
-                "ports": [
-                    {
-                        "containerPort": 7654,
-                        "hostPort": 7968,
-                        "name": "default",
-                        "portPolicy": "Dynamic",
-                        "protocol": "UDP"
-                    }
-                ],
-                "template": {
-                    "metadata": {
-                        "creationTimestamp": null
-                    },
-                    "spec": {
-                        "containers": [
-                            {
-                                "image": "gcr.io/agones-images/udp-server:0.9",
-                                "name": "simple-udp",
-                                "resources": {}
-                            }
-                        ]
-                    }
-                }
-            },
-            "status": {
-                "address": "192.168.39.184",
-                "nodeName": "minikube",
-                "ports": [
-                    {
-                        "name": "default",
-                        "port": 7968
-                    }
-                ],
-                "state": "Allocated"
+        "state": "Allocated",
+        "gameServerName": "simple-udp-v6jwb-cmdcv",
+        "ports": [
+            {
+                "name": "default",
+                "port": 7445
             }
-        }
+        ],
+        "address": "34.94.118.237",
+        "nodeName": "gke-test-cluster-default-f11755a7-5km3"
     }
 }
 ```
 
 You may wish to review the [Agones Kubernetes API]({{< ref "/docs/Reference/agones_crd_api_reference.html" >}}) for the full data structure reference.
 
-The [Verb Resources](https://github.com/kubernetes/community/blob/master/contributors/devel/api-conventions.md#verbs-on-resources)
+The [Kubernetes API Concepts](https://kubernetes.io/docs/reference/using-api/api-concepts/)
 section may also provide the more details on the API conventions that are used in the Kubernetes API.
 
 ## Next Steps

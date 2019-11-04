@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"agones.dev/agones/pkg"
 	"agones.dev/agones/pkg/client/clientset/versioned"
@@ -40,17 +41,22 @@ import (
 )
 
 const (
-	grpcPort = 59357
-	httpPort = 59358
+	defaultGRPCPort = 59357
+	defaultHTTPPort = 59358
 
 	// specifically env vars
 	gameServerNameEnv = "GAMESERVER_NAME"
 	podNamespaceEnv   = "POD_NAMESPACE"
 
 	// Flags (that can also be env vars)
-	localFlag   = "local"
-	fileFlag    = "file"
-	addressFlag = "address"
+	localFlag    = "local"
+	fileFlag     = "file"
+	testFlag     = "test"
+	addressFlag  = "address"
+	delayFlag    = "delay"
+	timeoutFlag  = "timeout"
+	grpcPortFlag = "grpc-port"
+	httpPortFlag = "http-port"
 )
 
 var (
@@ -60,15 +66,15 @@ var (
 func main() {
 	ctlConf := parseEnvFlags()
 	logger.WithField("version", pkg.Version).
-		WithField("grpcPort", grpcPort).WithField("httpPort", httpPort).
 		WithField("ctlConf", ctlConf).Info("Starting sdk sidecar")
 
-	grpcEndpoint := fmt.Sprintf("%s:%d", ctlConf.Address, grpcPort)
-	lis, err := net.Listen("tcp", grpcEndpoint)
-	if err != nil {
-		logger.WithField("grpcPort", grpcPort).WithField("Address", ctlConf.Address).Fatalf("Could not listen on grpcPort")
+	if ctlConf.Delay > 0 {
+		logger.Infof("Waiting %d seconds before starting", ctlConf.Delay)
+		time.Sleep(time.Duration(ctlConf.Delay) * time.Second)
 	}
+
 	stop := signals.NewStopChannel()
+	timedStop := make(chan struct{})
 	grpcServer := grpc.NewServer()
 	// don't graceful stop, because if we get a kill signal
 	// then the gameserver is being shut down, and we no longer
@@ -77,7 +83,7 @@ func main() {
 
 	mux := gwruntime.NewServeMux()
 	httpServer := &http.Server{
-		Addr:    fmt.Sprintf("%s:%d", ctlConf.Address, httpPort),
+		Addr:    fmt.Sprintf("%s:%d", ctlConf.Address, ctlConf.HTTPPort),
 		Handler: mux,
 	}
 	defer httpServer.Close() // nolint: errcheck
@@ -85,13 +91,34 @@ func main() {
 	defer cancel()
 
 	if ctlConf.IsLocal {
-		err = registerLocal(grpcServer, ctlConf)
+		localSDK, err := registerLocal(grpcServer, ctlConf)
 		if err != nil {
 			logger.WithError(err).Fatal("Could not start local sdk server")
 		}
+		defer localSDK.Close()
+
+		if ctlConf.Timeout != 0 {
+			go func() {
+				time.Sleep(time.Duration(ctlConf.Timeout) * time.Second)
+				close(timedStop)
+			}()
+		}
+	} else if ctlConf.Test != "" {
+		localSDK, err := registerTestSdkServer(grpcServer, ctlConf)
+		if err != nil {
+			logger.WithError(err).Fatal("Could not start test sdk server")
+		}
+		defer localSDK.Close()
+
+		if ctlConf.Timeout != 0 {
+			go func() {
+				time.Sleep(time.Duration(ctlConf.Timeout) * time.Second)
+				close(timedStop)
+			}()
+		}
 	} else {
 		var config *rest.Config
-		config, err = rest.InClusterConfig()
+		config, err := rest.InClusterConfig()
 		if err != nil {
 			logger.WithError(err).Fatal("Could not create in cluster config")
 		}
@@ -124,40 +151,61 @@ func main() {
 		sdk.RegisterSDKServer(grpcServer, s)
 	}
 
-	go runGrpc(grpcServer, lis)
+	grpcEndpoint := fmt.Sprintf("%s:%d", ctlConf.Address, ctlConf.GRPCPort)
+	go runGrpc(grpcServer, grpcEndpoint)
 	go runGateway(ctx, grpcEndpoint, mux, httpServer)
 
-	<-stop
+	select {
+	case <-stop:
+	case <-timedStop:
+	}
+
 	logger.Info("shutting down sdk server")
 }
 
-func registerLocal(grpcServer *grpc.Server, ctlConf config) error {
+func registerLocal(grpcServer *grpc.Server, ctlConf config) (localSDK *sdkserver.LocalSDKServer, err error) {
 	filePath := ""
-
 	if ctlConf.LocalFile != "" {
-		var err error
 		filePath, err = filepath.Abs(ctlConf.LocalFile)
 		if err != nil {
-			return err
+			return
 		}
 
 		if _, err = os.Stat(filePath); os.IsNotExist(err) {
-			return errors.Errorf("Could not find file: %s", filePath)
+			err = errors.Errorf("Could not find file: %s", filePath)
+			return
 		}
 	}
 
-	local, err := sdkserver.NewLocalSDKServer(filePath)
+	localSDK, err = sdkserver.NewLocalSDKServer(filePath)
 	if err != nil {
-		return err
+		return
 	}
-	sdk.RegisterSDKServer(grpcServer, local)
+	sdk.RegisterSDKServer(grpcServer, localSDK)
+	return
+}
 
-	return nil
+func registerTestSdkServer(grpcServer *grpc.Server, ctlConf config) (localSDK *sdkserver.LocalSDKServer, err error) {
+	localSDK, err = sdkserver.NewLocalSDKServer("")
+	if err != nil {
+		return
+	}
+	localSDK.SetTestMode(true)
+	localSDK.GenerateUID()
+	expectedFuncs := strings.Split(ctlConf.Test, ",")
+	localSDK.SetExpectedSequence(expectedFuncs)
+	sdk.RegisterSDKServer(grpcServer, localSDK)
+	return
 }
 
 // runGrpc runs the grpc service
-func runGrpc(grpcServer *grpc.Server, lis net.Listener) {
-	logger.Info("Starting SDKServer grpc service...")
+func runGrpc(grpcServer *grpc.Server, grpcEndpoint string) {
+	lis, err := net.Listen("tcp", grpcEndpoint)
+	if err != nil {
+		logger.WithField("grpcEndpoint", grpcEndpoint).Fatal("Could not listen on grpc endpoint")
+	}
+
+	logger.WithField("grpcEndpoint", grpcEndpoint).Info("Starting SDKServer grpc service...")
 	if err := grpcServer.Serve(lis); err != nil {
 		logger.WithError(err).Fatal("Could not serve grpc server")
 	}
@@ -174,7 +222,7 @@ func runGateway(ctx context.Context, grpcEndpoint string, mux *gwruntime.ServeMu
 		logger.WithError(err).Fatal("Could not register grpc-gateway")
 	}
 
-	logger.Info("Starting SDKServer grpc-gateway...")
+	logger.WithField("httpEndpoint", httpServer.Addr).Info("Starting SDKServer grpc-gateway...")
 	if err := httpServer.ListenAndServe(); err != nil {
 		if err == http.ErrServerClosed {
 			logger.WithError(err).Info("http server closed")
@@ -187,25 +235,47 @@ func runGateway(ctx context.Context, grpcEndpoint string, mux *gwruntime.ServeMu
 // parseEnvFlags parses all the flags and environment variables and returns
 // a configuration structure
 func parseEnvFlags() config {
+	viper.AllowEmptyEnv(true)
 	viper.SetDefault(localFlag, false)
 	viper.SetDefault(fileFlag, "")
+	viper.SetDefault(testFlag, "")
 	viper.SetDefault(addressFlag, "localhost")
+	viper.SetDefault(delayFlag, 0)
+	viper.SetDefault(timeoutFlag, 0)
+	viper.SetDefault(grpcPortFlag, defaultGRPCPort)
+	viper.SetDefault(httpPortFlag, defaultHTTPPort)
 	pflag.Bool(localFlag, viper.GetBool(localFlag),
 		"Set this, or LOCAL env, to 'true' to run this binary in local development mode. Defaults to 'false'")
 	pflag.StringP(fileFlag, "f", viper.GetString(fileFlag), "Set this, or FILE env var to the path of a local yaml or json file that contains your GameServer resoure configuration")
-	pflag.String(addressFlag, viper.GetString(addressFlag), "The Address to bind the server grpcPort to. Defaults to 'localhost")
+	pflag.String(addressFlag, viper.GetString(addressFlag), "The Address to bind the server grpcPort to. Defaults to 'localhost'")
+	pflag.Int(grpcPortFlag, viper.GetInt(grpcPortFlag), fmt.Sprintf("Port on which to bind the gRPC server. Defaults to %d", defaultGRPCPort))
+	pflag.Int(httpPortFlag, viper.GetInt(httpPortFlag), fmt.Sprintf("Port on which to bind the HTTP server. Defaults to %d", defaultHTTPPort))
+	pflag.Int(delayFlag, viper.GetInt(delayFlag), "Time to delay (in seconds) before starting to execute main. Useful for tests")
+	pflag.Int(timeoutFlag, viper.GetInt(timeoutFlag), "Time of execution (in seconds) before close. Useful for tests")
+	pflag.String(testFlag, viper.GetString(testFlag), "List functions which shoud be called during the SDK Conformance test run.")
 	pflag.Parse()
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	runtime.Must(viper.BindEnv(localFlag))
+	runtime.Must(viper.BindEnv(addressFlag))
+	runtime.Must(viper.BindEnv(testFlag))
 	runtime.Must(viper.BindEnv(gameServerNameEnv))
 	runtime.Must(viper.BindEnv(podNamespaceEnv))
+	runtime.Must(viper.BindEnv(delayFlag))
+	runtime.Must(viper.BindEnv(timeoutFlag))
+	runtime.Must(viper.BindEnv(grpcPortFlag))
+	runtime.Must(viper.BindEnv(httpPortFlag))
 	runtime.Must(viper.BindPFlags(pflag.CommandLine))
 
 	return config{
 		IsLocal:   viper.GetBool(localFlag),
 		Address:   viper.GetString(addressFlag),
 		LocalFile: viper.GetString(fileFlag),
+		Delay:     viper.GetInt(delayFlag),
+		Timeout:   viper.GetInt(timeoutFlag),
+		Test:      viper.GetString(testFlag),
+		GRPCPort:  viper.GetInt(grpcPortFlag),
+		HTTPPort:  viper.GetInt(httpPortFlag),
 	}
 }
 
@@ -214,4 +284,9 @@ type config struct {
 	Address   string
 	IsLocal   bool
 	LocalFile string
+	Delay     int
+	Timeout   int
+	Test      string
+	GRPCPort  int
+	HTTPPort  int
 }

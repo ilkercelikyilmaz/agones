@@ -27,18 +27,13 @@
 # (defaults virtualbox for Linux and macOS, hyperv for windows) if you so desire.
 minikube-test-cluster: DOCKER_RUN_ARGS+=--network=host -v $(minikube_cert_mount)
 minikube-test-cluster: $(ensure-build-image) minikube-agones-profile
-	# localkube bootstrapper fixes issues with profiles
-	$(MINIKUBE) start --kubernetes-version v1.11.5 --vm-driver $(MINIKUBE_DRIVER) \
-		--extra-config=apiserver.authorization-mode=RBAC
+	$(MINIKUBE) start --kubernetes-version v1.12.10 --vm-driver $(MINIKUBE_DRIVER)
 	# wait until the master is up
 	until docker run --rm $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) kubectl cluster-info; \
 		do \
 			echo "Waiting for cluster to start..."; \
 			sleep 1; \
 		done
-	# this is needed for kubernetes component to work correctly while RBAC is enabled
-	-docker run --rm $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) \
-		kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --serviceaccount=kube-system:default
 	$(MAKE) setup-test-cluster DOCKER_RUN_ARGS="$(DOCKER_RUN_ARGS)"
 	$(MAKE) minikube-post-start
 
@@ -57,12 +52,13 @@ minikube-push: minikube-agones-profile
 	$(MAKE) minikube-transfer-image TAG=$(sidecar_tag)
 	$(MAKE) minikube-transfer-image TAG=$(controller_tag)
 	$(MAKE) minikube-transfer-image TAG=$(ping_tag)
+	$(MAKE) minikube-transfer-image TAG=$(allocator_tag)
 
 # Installs the current development version of Agones into the Kubernetes cluster.
 # Use this instead of `make install`, as it disables PullAlways on the install.yaml
 minikube-install: minikube-agones-profile
 	$(MAKE) install DOCKER_RUN_ARGS="--network=host -v $(minikube_cert_mount)" ALWAYS_PULL_SIDECAR=false \
-		IMAGE_PULL_POLICY=IfNotPresent PING_SERVICE_TYPE=NodePort
+		IMAGE_PULL_POLICY=IfNotPresent PING_SERVICE_TYPE=NodePort ALLOCATOR_SERVICE_TYPE=NodePort
 
 minikube-uninstall: $(ensure-build-image) minikube-agones-profile
 	$(MAKE) uninstall DOCKER_RUN_ARGS="--network=host -v $(minikube_cert_mount)"

@@ -1,4 +1,20 @@
+// Copyright 2019 Google LLC All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 const EventEmitter = require('events');
+
+const grpc = require('grpc');
 
 const messages = require('../lib/sdk_pb');
 const AgonesSDK = require('../src/agonesSDK');
@@ -8,6 +24,50 @@ describe('agones', () => {
 
 	beforeEach(() => {
 		agonesSDK = new AgonesSDK();
+	});
+
+	describe('port', () => {
+		it('returns the default port if $AGONES_SDK_GRPC_PORT is not defined', async () => {
+			let port = agonesSDK.port;
+			expect(port).toEqual('59357');
+		});
+
+		it('returns a valid port set in $AGONES_SDK_GRPC_PORT', async () => {
+			process.env.AGONES_SDK_GRPC_PORT = '6789';
+			let port = agonesSDK.port;
+			expect(port).toEqual('6789');
+		});
+
+		it('returns an invalid port set in $AGONES_SDK_GRPC_PORT', async () => {
+			process.env.AGONES_SDK_GRPC_PORT = 'foo';
+			let port = agonesSDK.port;
+			expect(port).toEqual('foo');
+		});
+	});
+
+	describe('connect', () => {
+		it('calls the server and handles success', async () => {
+			spyOn(agonesSDK.client, 'waitForReady').and.callFake((deadline, callback) => {
+				let result = new messages.Empty();
+				callback(undefined, result);
+			});
+			let result = await agonesSDK.connect();
+			expect(agonesSDK.client.waitForReady).toHaveBeenCalled();
+			expect(result).toEqual(undefined);
+		});
+
+		it('calls the server and handles failure', async () => {
+			spyOn(agonesSDK.client, 'waitForReady').and.callFake((deadline, callback) => {
+				callback('error', undefined);
+			});
+			try {
+				await agonesSDK.connect();
+				fail();
+			} catch (error) {
+				expect(agonesSDK.client.waitForReady).toHaveBeenCalled();
+				expect(error).toEqual('error');
+			}
+		});
 	});
 
 	describe('allocate', () => {
@@ -189,6 +249,32 @@ describe('agones', () => {
 			expect(result.status).toBeDefined();
 			expect(result.status.state).toEqual('up');
 		});
+		it('captures CANCELLED errors only', async() => {
+			let serverEmitter = new EventEmitter();
+			spyOn(agonesSDK.client, 'watchGameServer').and.callFake(() => {
+				return serverEmitter;
+			});
+
+			let callback = jasmine.createSpy('callback');
+			agonesSDK.watchGameServer(callback);
+
+			try {
+				serverEmitter.emit('error', {
+					code: grpc.status.CANCELLED
+				});
+			} catch (error) {
+				fail();
+			}
+
+			try {
+				serverEmitter.emit('error', {
+					code: grpc.status.ABORTED
+				});
+				fail();
+			} catch (error) {
+				expect(error.code).toEqual(grpc.status.ABORTED);
+			}
+		});
 	});
 
 	describe('setLabel', () => {
@@ -268,11 +354,65 @@ describe('agones', () => {
 			}
 		});
 	});
+
 	describe('close', () => {
 		it('closes the client connection when called', async () => {
-			spyOn(agonesSDK.client, 'close').and.callFake(()=>{});
+			spyOn(agonesSDK.client, 'close');
 			await agonesSDK.close();
 			expect(agonesSDK.client.close).toHaveBeenCalled();
+		});
+		it('destroys the health stream if set', async () => {
+			let stream = jasmine.createSpyObj('stream', ['destroy', 'write']);
+			spyOn(agonesSDK.client, 'health').and.callFake(() => {
+				return stream;
+			});
+			agonesSDK.health();
+			spyOn(agonesSDK.client, 'close').and.callFake(() => {});
+			await agonesSDK.close();
+			expect(stream.destroy).toHaveBeenCalled();
+		});
+		it('cancels any watchers', async () => {
+			let serverEmitter = new EventEmitter();
+			serverEmitter.call = jasmine.createSpyObj('call', ['cancel']);
+			spyOn(agonesSDK.client, 'watchGameServer').and.callFake(() => {
+				return serverEmitter;
+			});
+
+			let callback = jasmine.createSpy('callback');
+			agonesSDK.watchGameServer(callback);
+
+			spyOn(agonesSDK.client, 'close');
+			await agonesSDK.close();
+			expect(serverEmitter.call.cancel).toHaveBeenCalled();
+		});
+	});
+
+	describe('reserve', () => {
+		it('calls the server with duration parameter and handles success', async () => {
+			spyOn(agonesSDK.client, 'reserve').and.callFake((request, callback) => {
+				let result = new messages.Empty();
+				callback(undefined, result);
+			});
+
+			let result = await agonesSDK.reserve(10);
+			expect(agonesSDK.client.reserve).toHaveBeenCalled();
+			expect(result).toEqual({});
+
+			let request = agonesSDK.client.reserve.calls.argsFor(0)[0];
+			expect(request.getSeconds()).toEqual(10);
+		});
+
+		it('calls the server and handles failure', async () => {
+			spyOn(agonesSDK.client, 'reserve').and.callFake((request, callback) => {
+				callback('error', undefined);
+			});
+			try {
+				await agonesSDK.reserve(10);
+				fail();
+			} catch (error) {
+				expect(agonesSDK.client.reserve).toHaveBeenCalled();
+				expect(error).toEqual('error');
+			}
 		});
 	});
 });

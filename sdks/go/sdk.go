@@ -18,6 +18,7 @@ package sdk
 import (
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"agones.dev/agones/pkg/sdk"
@@ -25,8 +26,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
-
-const port = 59357
 
 // GameServerCallback is a function definition to be called
 // when a GameServer CRD has been changed
@@ -43,7 +42,11 @@ type SDK struct {
 // localhost on port 59357. Blocks until connection and handshake are made.
 // Times out after 30 seconds.
 func NewSDK() (*SDK, error) {
-	addr := fmt.Sprintf("localhost:%d", port)
+	p := os.Getenv("AGONES_SDK_GRPC_PORT")
+	if p == "" {
+		p = "59357"
+	}
+	addr := fmt.Sprintf("localhost:%s", p)
 	s := &SDK{
 		ctx: context.Background(),
 	}
@@ -77,6 +80,14 @@ func (s *SDK) Allocate() error {
 func (s *SDK) Shutdown() error {
 	_, err := s.client.Shutdown(s.ctx, &sdk.Empty{})
 	return errors.Wrapf(err, "could not send Shutdown message")
+}
+
+// Reserve marks the Game Server as Reserved for a given duration, at which point
+// it will return the GameServer to a Ready state.
+// Do note, the smallest unit available in the time.Duration argument is a second.
+func (s *SDK) Reserve(d time.Duration) error {
+	_, err := s.client.Reserve(s.ctx, &sdk.Duration{Seconds: int64(d.Seconds())})
+	return errors.Wrap(err, "could not send Reserve message")
 }
 
 // Health sends a ping to the health
@@ -122,10 +133,10 @@ func (s *SDK) WatchGameServer(f GameServerCallback) error {
 			gs, err = stream.Recv()
 			if err != nil {
 				if err == io.EOF {
-					fmt.Println("gameserver event stream EOF received")
+					_, _ = fmt.Fprintln(os.Stderr, "gameserver event stream EOF received")
 					return
 				}
-				fmt.Printf("error watching GameServer: %s\n", err.Error())
+				_, _ = fmt.Fprintf(os.Stderr, "error watching GameServer: %s\n", err.Error())
 				// This is to wait for the reconnection, and not peg the CPU at 100%
 				time.Sleep(time.Second)
 				continue

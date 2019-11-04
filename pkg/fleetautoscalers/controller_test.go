@@ -20,7 +20,8 @@ import (
 	"net/http"
 	"testing"
 
-	"agones.dev/agones/pkg/apis/stable/v1alpha1"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
+	autoscalingv1 "agones.dev/agones/pkg/apis/autoscaling/v1"
 	agtesting "agones.dev/agones/pkg/testing"
 	"agones.dev/agones/pkg/util/webhooks"
 	"github.com/heptiolabs/healthcheck"
@@ -34,7 +35,7 @@ import (
 )
 
 var (
-	gvk = metav1.GroupVersionKind(v1alpha1.SchemeGroupVersion.WithKind("FleetAutoscaler"))
+	gvk = metav1.GroupVersionKind(agonesv1.SchemeGroupVersion.WithKind("FleetAutoscaler"))
 )
 
 func TestControllerCreationValidationHandler(t *testing.T) {
@@ -133,13 +134,13 @@ func TestControllerSyncFleetAutoscaler(t *testing.T) {
 		fasUpdated := false
 
 		m.AgonesClient.AddReactor("list", "fleetautoscalers", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1alpha1.FleetAutoscalerList{Items: []v1alpha1.FleetAutoscaler{*fas}}, nil
+			return true, &autoscalingv1.FleetAutoscalerList{Items: []autoscalingv1.FleetAutoscaler{*fas}}, nil
 		})
 
 		m.AgonesClient.AddReactor("update", "fleetautoscalers", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			fasUpdated = true
 			ca := action.(k8stesting.UpdateAction)
-			fas := ca.GetObject().(*v1alpha1.FleetAutoscaler)
+			fas := ca.GetObject().(*autoscalingv1.FleetAutoscaler)
 			assert.Equal(t, fas.Status.AbleToScale, true)
 			assert.Equal(t, fas.Status.ScalingLimited, false)
 			assert.Equal(t, fas.Status.CurrentReplicas, int32(5))
@@ -149,18 +150,18 @@ func TestControllerSyncFleetAutoscaler(t *testing.T) {
 		})
 
 		m.AgonesClient.AddReactor("list", "fleets", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1alpha1.FleetList{Items: []v1alpha1.Fleet{*f}}, nil
+			return true, &agonesv1.FleetList{Items: []agonesv1.Fleet{*f}}, nil
 		})
 
 		m.AgonesClient.AddReactor("update", "fleets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			fUpdated = true
 			ca := action.(k8stesting.UpdateAction)
-			f := ca.GetObject().(*v1alpha1.Fleet)
+			f := ca.GetObject().(*agonesv1.Fleet)
 			assert.Equal(t, f.Spec.Replicas, int32(12))
 			return true, f, nil
 		})
 
-		_, cancel := agtesting.StartInformers(m, c.fleetAutoscalerSynced)
+		_, cancel := agtesting.StartInformers(m, c.fleetSynced, c.fleetAutoscalerSynced)
 		defer cancel()
 
 		err := c.syncFleetAutoscaler("default/fas-1")
@@ -186,13 +187,13 @@ func TestControllerSyncFleetAutoscaler(t *testing.T) {
 		fasUpdated := false
 
 		m.AgonesClient.AddReactor("list", "fleetautoscalers", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1alpha1.FleetAutoscalerList{Items: []v1alpha1.FleetAutoscaler{*fas}}, nil
+			return true, &autoscalingv1.FleetAutoscalerList{Items: []autoscalingv1.FleetAutoscaler{*fas}}, nil
 		})
 
 		m.AgonesClient.AddReactor("update", "fleetautoscalers", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			fasUpdated = true
 			ca := action.(k8stesting.UpdateAction)
-			fas := ca.GetObject().(*v1alpha1.FleetAutoscaler)
+			fas := ca.GetObject().(*autoscalingv1.FleetAutoscaler)
 			assert.Equal(t, fas.Status.AbleToScale, true)
 			assert.Equal(t, fas.Status.ScalingLimited, false)
 			assert.Equal(t, fas.Status.CurrentReplicas, int32(20))
@@ -202,19 +203,19 @@ func TestControllerSyncFleetAutoscaler(t *testing.T) {
 		})
 
 		m.AgonesClient.AddReactor("list", "fleets", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1alpha1.FleetList{Items: []v1alpha1.Fleet{*f}}, nil
+			return true, &agonesv1.FleetList{Items: []agonesv1.Fleet{*f}}, nil
 		})
 
 		m.AgonesClient.AddReactor("update", "fleets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			fUpdated = true
 			ca := action.(k8stesting.UpdateAction)
-			f := ca.GetObject().(*v1alpha1.Fleet)
+			f := ca.GetObject().(*agonesv1.Fleet)
 			assert.Equal(t, f.Spec.Replicas, int32(13))
 
 			return true, f, nil
 		})
 
-		_, cancel := agtesting.StartInformers(m, c.fleetAutoscalerSynced)
+		_, cancel := agtesting.StartInformers(m, c.fleetSynced, c.fleetAutoscalerSynced)
 		defer cancel()
 
 		err := c.syncFleetAutoscaler("default/fas-1")
@@ -238,7 +239,7 @@ func TestControllerSyncFleetAutoscaler(t *testing.T) {
 		fas.Status.DesiredReplicas = 10
 
 		m.AgonesClient.AddReactor("list", "fleetautoscalers", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1alpha1.FleetAutoscalerList{Items: []v1alpha1.FleetAutoscaler{*fas}}, nil
+			return true, &autoscalingv1.FleetAutoscalerList{Items: []autoscalingv1.FleetAutoscaler{*fas}}, nil
 		})
 
 		m.AgonesClient.AddReactor("update", "fleetautoscalers", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -251,7 +252,7 @@ func TestControllerSyncFleetAutoscaler(t *testing.T) {
 			return false, nil, nil
 		})
 
-		_, cancel := agtesting.StartInformers(m, c.fleetAutoscalerSynced)
+		_, cancel := agtesting.StartInformers(m, c.fleetSynced, c.fleetAutoscalerSynced)
 		defer cancel()
 
 		err := c.syncFleetAutoscaler(fas.ObjectMeta.Name)
@@ -268,19 +269,19 @@ func TestControllerSyncFleetAutoscaler(t *testing.T) {
 		updated := false
 
 		m.AgonesClient.AddReactor("list", "fleetautoscalers", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, &v1alpha1.FleetAutoscalerList{Items: []v1alpha1.FleetAutoscaler{*fas}}, nil
+			return true, &autoscalingv1.FleetAutoscalerList{Items: []autoscalingv1.FleetAutoscaler{*fas}}, nil
 		})
 
 		m.AgonesClient.AddReactor("update", "fleetautoscalers", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			updated = true
 			ca := action.(k8stesting.UpdateAction)
-			fas := ca.GetObject().(*v1alpha1.FleetAutoscaler)
+			fas := ca.GetObject().(*autoscalingv1.FleetAutoscaler)
 			assert.Equal(t, fas.Status.CurrentReplicas, int32(0))
 			assert.Equal(t, fas.Status.DesiredReplicas, int32(0))
 			return true, fas, nil
 		})
 
-		_, cancel := agtesting.StartInformers(m, c.fleetAutoscalerSynced)
+		_, cancel := agtesting.StartInformers(m, c.fleetSynced, c.fleetAutoscalerSynced)
 		defer cancel()
 
 		err := c.syncFleetAutoscaler("default/fas-1")
@@ -304,7 +305,7 @@ func TestControllerScaleFleet(t *testing.T) {
 		m.AgonesClient.AddReactor("update", "fleets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			update = true
 			ca := action.(k8stesting.UpdateAction)
-			f := ca.GetObject().(*v1alpha1.Fleet)
+			f := ca.GetObject().(*agonesv1.Fleet)
 			assert.Equal(t, replicas, f.Spec.Replicas)
 
 			return true, f, nil
@@ -344,7 +345,7 @@ func TestControllerUpdateStatus(t *testing.T) {
 		m.AgonesClient.AddReactor("update", "fleetautoscalers", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			fasUpdated = true
 			ca := action.(k8stesting.UpdateAction)
-			fas := ca.GetObject().(*v1alpha1.FleetAutoscaler)
+			fas := ca.GetObject().(*autoscalingv1.FleetAutoscaler)
 			assert.Equal(t, fas.Status.AbleToScale, true)
 			assert.Equal(t, fas.Status.ScalingLimited, false)
 			assert.Equal(t, fas.Status.CurrentReplicas, int32(10))
@@ -408,7 +409,7 @@ func TestControllerUpdateStatusUnableToScale(t *testing.T) {
 		m.AgonesClient.AddReactor("update", "fleetautoscalers", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			fasUpdated = true
 			ca := action.(k8stesting.UpdateAction)
-			fas := ca.GetObject().(*v1alpha1.FleetAutoscaler)
+			fas := ca.GetObject().(*autoscalingv1.FleetAutoscaler)
 			assert.Equal(t, fas.Status.AbleToScale, false)
 			assert.Equal(t, fas.Status.ScalingLimited, false)
 			assert.Equal(t, fas.Status.CurrentReplicas, int32(0))
@@ -448,18 +449,18 @@ func TestControllerUpdateStatusUnableToScale(t *testing.T) {
 	})
 }
 
-func defaultFixtures() (*v1alpha1.FleetAutoscaler, *v1alpha1.Fleet) {
-	f := &v1alpha1.Fleet{
+func defaultFixtures() (*autoscalingv1.FleetAutoscaler, *agonesv1.Fleet) {
+	f := &agonesv1.Fleet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fleet-1",
 			Namespace: "default",
 			UID:       "1234",
 		},
-		Spec: v1alpha1.FleetSpec{
+		Spec: agonesv1.FleetSpec{
 			Replicas: 8,
-			Template: v1alpha1.GameServerTemplateSpec{},
+			Template: agonesv1.GameServerTemplateSpec{},
 		},
-		Status: v1alpha1.FleetStatus{
+		Status: agonesv1.FleetStatus{
 			Replicas:          5,
 			ReadyReplicas:     3,
 			ReservedReplicas:  3,
@@ -467,16 +468,16 @@ func defaultFixtures() (*v1alpha1.FleetAutoscaler, *v1alpha1.Fleet) {
 		},
 	}
 
-	fas := &v1alpha1.FleetAutoscaler{
+	fas := &autoscalingv1.FleetAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fas-1",
 			Namespace: "default",
 		},
-		Spec: v1alpha1.FleetAutoscalerSpec{
+		Spec: autoscalingv1.FleetAutoscalerSpec{
 			FleetName: f.ObjectMeta.Name,
-			Policy: v1alpha1.FleetAutoscalerPolicy{
-				Type: v1alpha1.BufferPolicyType,
-				Buffer: &v1alpha1.BufferPolicy{
+			Policy: autoscalingv1.FleetAutoscalerPolicy{
+				Type: autoscalingv1.BufferPolicyType,
+				Buffer: &autoscalingv1.BufferPolicy{
 					BufferSize:  intstr.FromInt(5),
 					MaxReplicas: 100,
 				},
@@ -487,12 +488,12 @@ func defaultFixtures() (*v1alpha1.FleetAutoscaler, *v1alpha1.Fleet) {
 	return fas, f
 }
 
-func defaultWebhookFixtures() (*v1alpha1.FleetAutoscaler, *v1alpha1.Fleet) {
+func defaultWebhookFixtures() (*autoscalingv1.FleetAutoscaler, *agonesv1.Fleet) {
 	fas, f := defaultFixtures()
-	fas.Spec.Policy.Type = v1alpha1.WebhookPolicyType
+	fas.Spec.Policy.Type = autoscalingv1.WebhookPolicyType
 	fas.Spec.Policy.Buffer = nil
 	url := "/autoscaler"
-	fas.Spec.Policy.Webhook = &v1alpha1.WebhookPolicy{
+	fas.Spec.Policy.Webhook = &autoscalingv1.WebhookPolicy{
 		Service: &admregv1b.ServiceReference{
 			Name: "fleetautoscaler-service",
 			Path: &url,
@@ -511,7 +512,7 @@ func newFakeController() (*Controller, agtesting.Mocks) {
 	return c, m
 }
 
-func newAdmissionReview(fas v1alpha1.FleetAutoscaler) (admv1beta1.AdmissionReview, error) {
+func newAdmissionReview(fas autoscalingv1.FleetAutoscaler) (admv1beta1.AdmissionReview, error) {
 	raw, err := json.Marshal(fas)
 	if err != nil {
 		return admv1beta1.AdmissionReview{}, err

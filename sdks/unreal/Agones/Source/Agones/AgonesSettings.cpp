@@ -1,4 +1,4 @@
-// Copyright 2019 Google Inc. All Rights Reserved.
+// Copyright 2019 Google LLC All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 UAgonesSettings::UAgonesSettings()
 	: Super()
-	, AgonesSidecarAddress("http://localhost:59358")
-	, bHealthPingEnabled(false)
+	, bHealthPingEnabled(true)
 	, HealthPingSeconds(5.0f)
 	, bDebugLogEnabled(false)
 {

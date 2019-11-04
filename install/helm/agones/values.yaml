@@ -36,7 +36,7 @@ agones:
     resources: {}
     nodeSelector: {}
     tolerations:
-    - key: "stable.agones.dev/agones-system"
+    - key: "agones.dev/agones-system"
       operator: "Equal"
       value: "true"
       effect: "NoExecute"
@@ -46,7 +46,7 @@ agones:
         - weight: 1
           preference:
             matchExpressions:
-              - key: stable.agones.dev/agones-system
+              - key: agones.dev/agones-system
                 operator: Exists
     generateTLS: true
     safeToEvict: false
@@ -67,7 +67,7 @@ agones:
     resources: {}
     nodeSelector: {}
     tolerations:
-    - key: "stable.agones.dev/agones-system"
+    - key: "agones.dev/agones-system"
       operator: "Equal"
       value: "true"
       effect: "NoExecute"
@@ -77,7 +77,7 @@ agones:
         - weight: 1
           preference:
             matchExpressions:
-              - key: stable.agones.dev/agones-system
+              - key: agones.dev/agones-system
                 operator: Exists
     replicas: 2
     http:
@@ -97,11 +97,24 @@ agones:
       timeoutSeconds: 1
   allocator:
     install: true
+    healthCheck:
+      initialDelaySeconds: 3
+      periodSeconds: 3
+      failureThreshold: 3
+      timeoutSeconds: 1
     tolerations:
-    - key: "stable.agones.dev/agones-system"
+    - key: "agones.dev/agones-system"
       operator: "Equal"
       value: "true"
       effect: "NoExecute"
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: agones.dev/agones-system
+                operator: Exists
     replicas: 3
     http:
       expose: true
@@ -111,7 +124,7 @@ agones:
     generateTLS: true
   image:
     registry: gcr.io/agones-images
-    tag: 0.11.0
+    tag: 1.2.0
     controller:
       name: agones-controller
       pullPolicy: IfNotPresent

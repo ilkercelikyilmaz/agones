@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# ForceUpdate 7 -- change here if you need to force a rebuild
+# ForceUpdate 11 -- change here if you need to force a rebuild
 
 FROM debian:stretch
 
@@ -44,12 +44,18 @@ RUN go get -u golang.org/x/tools/cmd/goimports
 # RUN gcloud components update
 RUN gcloud components update && gcloud components install app-engine-go
 
+# the kubernetes version for the file
+ENV KUBERNETES_VER 1.12.10
+
 # overwrite kubectl as we want a specific version
-ENV KUBECTL_VER 1.11.5
-RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VER}/bin/linux/amd64/kubectl && \
+RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/v${KUBERNETES_VER}/bin/linux/amd64/kubectl && \
     chmod go+rx ./kubectl && \
     mv ./kubectl /usr/local/bin/kubectl
 RUN echo "source <(kubectl completion bash)" >> /root/.bashrc
+
+# install the release branch of the code generator tools
+RUN mkdir -p /go/src/k8s.io && cd /go/src/k8s.io && \
+    git clone -b kubernetes-${KUBERNETES_VER} --depth=3 https://github.com/kubernetes/code-generator.git
 
 # install Helm package manager
 ENV HELM_VER 2.11.0
@@ -62,11 +68,7 @@ RUN curl -L  ${HELM_URL} > /tmp/helm.tar.gz \
 RUN echo "source <(helm completion bash)" >> /root/.bashrc
 
 # install golang-ci linter
-RUN curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $GOPATH/bin v1.16.0
-
-# install the release branch of the code generator tools
-RUN mkdir -p /go/src && cd /go/src && mkdir -p k8s.io && cd k8s.io && \
-    git clone -b kubernetes-1.11.5 --depth=3 https://github.com/kubernetes/code-generator.git
+RUN curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $GOPATH/bin v1.18.0
 
 #
 #  \ \      / /__| |__  ___(_) |_ ___
@@ -75,7 +77,7 @@ RUN mkdir -p /go/src && cd /go/src && mkdir -p k8s.io && cd k8s.io && \
 #     \_/\_/ \___|_.__/|___/_|\__\___|
 #
 
-ENV HUGO_VER 0.55.2
+ENV HUGO_VER 0.58.3
 RUN mkdir /tmp/hugo && \
     wget -q -O /tmp/hugo/hugo.tar.gz https://github.com/gohugoio/hugo/releases/download/v${HUGO_VER}/hugo_extended_${HUGO_VER}_Linux-64bit.tar.gz && \
     tar -zxvf /tmp/hugo/hugo.tar.gz -C /tmp/hugo/ && \
@@ -103,7 +105,7 @@ RUN echo "export PATH=/usr/local/go/bin:/go/bin/:\$PATH" >> /root/.bashrc
 RUN echo "export EDITOR=nano" >> /root/.bashrc
 
 # install terraform
-RUN wget -nv https://releases.hashicorp.com/terraform/0.11.13/terraform_0.11.13_linux_386.zip && unzip ./terraform_0.11.13_linux_386.zip && mv terraform /usr/local/bin/
+RUN wget -nv https://releases.hashicorp.com/terraform/0.12.3/terraform_0.12.3_linux_386.zip && unzip ./terraform_0.12.3_linux_386.zip && mv terraform /usr/local/bin/
 
 # code generation scripts
 COPY *.sh /root/

@@ -21,10 +21,12 @@ resources:
     cluster:
       name: {{ properties["cluster.name"] }}
       description: Test cluster for Agones
-      initialClusterVersion: "1.11"
+      initialClusterVersion: "1.12"
       nodePools:
         - name: "default"
           initialNodeCount: {{ properties["cluster.nodePool.initialNodeCount"] }}
+          management:
+            autoUpgrade: false
           config:
             machineType: {{ properties["cluster.nodePool.machineType"] }}
             tags:
@@ -38,6 +40,8 @@ resources:
               - https://www.googleapis.com/auth/trace.append
         - name: "agones-system"
           initialNodeCount: 1
+          management:
+            autoUpgrade: false
           config:
             machineType: n1-standard-4
             oauthScopes:
@@ -48,13 +52,15 @@ resources:
               - https://www.googleapis.com/auth/servicecontrol
               - https://www.googleapis.com/auth/trace.append
             labels:
-              stable.agones.dev/agones-system: "true"
+              agones.dev/agones-system: "true"
             taints:
-              - key: "stable.agones.dev/agones-system"
+              - key: "agones.dev/agones-system"
                 value: "true"
                 effect: "NO_EXECUTE"
         - name: "agones-metrics"
           initialNodeCount: 1
+          management:
+            autoUpgrade: false
           config:
             machineType: n1-standard-4
             oauthScopes:
@@ -65,16 +71,11 @@ resources:
               - https://www.googleapis.com/auth/servicecontrol
               - https://www.googleapis.com/auth/trace.append
             labels:
-              stable.agones.dev/agones-metrics: "true"
+              agones.dev/agones-metrics: "true"
             taints:
-              - key: "stable.agones.dev/agones-metrics"
+              - key: "agones.dev/agones-metrics"
                 value: "true"
                 effect: "NO_EXECUTE"
-      masterAuth:
-        username: admin
-        password: supersecretpassword
-      legacyAbac:
-        enabled: {{ properties["cluster.legacyAbac"] }}
 - name: game-server-firewall
   type: compute.beta.firewall
   properties:

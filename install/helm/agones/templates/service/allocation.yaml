@@ -13,11 +13,11 @@
 # limitations under the License.
 
 {{- if .Values.agones.allocator.install }}
-# Define a Service for the gameserver-allocator
+# Define a Service for the agones-allocator
 apiVersion: v1
 kind: Service
 metadata:
-  name: gameserver-allocator
+  name: agones-allocator
   namespace: {{ .Release.Namespace }}
   labels:
     component: allocator
@@ -36,11 +36,11 @@ spec:
   type: {{ .Values.agones.allocator.http.serviceType }}
 
 ---
-# Deploy a pod to run the gameserver-allocator code
+# Deploy a pod to run the agones-allocator code
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gameserver-allocator
+  name: agones-allocator
   namespace: {{ .Release.Namespace }}
   labels:
     multicluster.agones.dev/role: allocator
@@ -57,13 +57,31 @@ spec:
       heritage: {{ .Release.Service }}
   template:
     metadata:
+      annotations:
+{{- if .Values.agones.allocator.generateTLS }}
+        revision/tls-cert: {{ .Release.Revision | quote }}
+{{- end }}
       labels:
         multicluster.agones.dev/role: allocator
         app: {{ template "agones.name" . }}
         release: {{ .Release.Name }}
         heritage: {{ .Release.Service }}
+      annotations:
+{{- if and (.Values.agones.metrics.prometheusServiceDiscovery) (.Values.agones.metrics.prometheusEnabled) }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+{{- end }}
     spec:
-      serviceAccountName: gameserver-allocator
+      {{- if .Values.agones.allocator.affinity }}
+      affinity:
+{{ toYaml .Values.agones.allocator.affinity | indent 8 }}
+      {{- end }}
+      {{- if .Values.agones.allocator.tolerations }}
+      tolerations:
+{{ toYaml .Values.agones.allocator.tolerations | indent 8 }}
+      {{- end }}
+      serviceAccountName: agones-allocator
       volumes:
       - name: tls
         secret:
@@ -75,6 +93,25 @@ spec:
       - name: agones-allocator
         image: "{{ .Values.agones.image.registry }}/{{ .Values.agones.image.allocator.name}}:{{ default .Values.agones.image.tag .Values.agones.image.allocator.tag }}"
         imagePullPolicy: {{ .Values.agones.image.controller.pullPolicy }}
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: 8080
+          initialDelaySeconds: {{ .Values.agones.allocator.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.agones.allocator.healthCheck.periodSeconds }}
+          failureThreshold: {{ .Values.agones.allocator.healthCheck.failureThreshold }}
+          timeoutSeconds: {{ .Values.agones.allocator.healthCheck.timeoutSeconds }}
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+        env:
+        - name: PROMETHEUS_EXPORTER
+          value: {{ .Values.agones.metrics.prometheusEnabled | quote }}
+        - name: STACKDRIVER_EXPORTER
+          value: {{ .Values.agones.metrics.stackdriverEnabled | quote }}
+        - name: GCP_PROJECT_ID
+          value: {{ .Values.agones.metrics.stackdriverProjectID | quote }}
         ports:
         - name: https
           containerPort: 8443
@@ -85,18 +122,13 @@ spec:
         - mountPath: /home/allocator/client-ca
           name: client-ca
           readOnly: true
-        env:
-        - name: NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
 
 ---
-# Create a Role in the default namespace that grants access to the agones api
+# Create a ClusterRole in that grants access to the agones allocation api
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
-  name: gameserver-allocator
+  name: agones-allocator
   namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "agones.name" $ }}
@@ -104,16 +136,31 @@ metadata:
     release: {{ $.Release.Name }}
     heritage: {{ $.Release.Service }}
 rules:
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
 - apiGroups: ["allocation.agones.dev"]
   resources: ["gameserverallocations"]
   verbs: ["create"]
+- apiGroups: [""]
+  resources: ["nodes", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["agones.dev"]
+  resources: ["gameservers", "gameserversets"]
+  verbs: ["get", "list", "update", "watch"]
+- apiGroups: ["agones.dev"]
+  resources: ["gameservers"]
+  verbs: ["patch"]
+- apiGroups: ["multicluster.agones.dev"]
+  resources: ["gameserverallocationpolicies"]
+  verbs: ["get", "list", "watch"]
 
 ---
 # Create a ServiceAccount that will be bound to the above role
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: gameserver-allocator
+  name: agones-allocator
   namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "agones.name" $ }}
@@ -122,11 +169,11 @@ metadata:
     heritage: {{ $.Release.Service }}
 
 ---
-# Bind the gameserver-allocator ServiceAccount to the gameserver-allocator Role
+# Bind the agones-allocator ServiceAccount to the agones-allocator ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
-  name: gameserver-allocator
+  name: agones-allocator
   namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "agones.name" $ }}
@@ -135,11 +182,12 @@ metadata:
     heritage: {{ $.Release.Service }}
 subjects:
 - kind: ServiceAccount
-  name: gameserver-allocator
+  name: agones-allocator
   namespace: {{ .Release.Namespace }}
 roleRef:
-  kind: Role
-  name: gameserver-allocator
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agones-allocator
  
 {{- end }}
 
@@ -150,6 +198,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: allocator-client-ca
+  namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "agones.fullname" . }}
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
@@ -170,6 +219,7 @@ kind: Secret
 type: kubernetes.io/tls
 metadata:
   name: allocator-tls
+  namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "agones.fullname" . }}
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
@@ -190,6 +240,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: allocator-tls-ca
+  namespace: {{ .Release.Namespace }}
   labels:
     app: {{ template "agones.fullname" . }}
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"

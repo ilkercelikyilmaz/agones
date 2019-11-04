@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# (GameServerAllocation is currently experimental, and likely to change in upcoming releases)
-
-apiVersion: "allocation.agones.dev/v1alpha1"
+apiVersion: "allocation.agones.dev/v1"
 kind: GameServerAllocation
 spec:
   # GameServer selector from which to choose GameServers from.
@@ -24,4 +22,4 @@ spec:
   # Below is an example of a GameServer allocated against a given fleet.
   required:
     matchLabels:
-      stable.agones.dev/fleet: xonotic
+      agones.dev/fleet: xonotic

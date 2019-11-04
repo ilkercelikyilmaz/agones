@@ -25,13 +25,13 @@ and you have a running fleet of game servers.
 Let's create a Fleet Autoscaler using the following command : 
 
 ```
-kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/simple-udp/fleetautoscaler.yaml
+kubectl apply -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/fleetautoscaler.yaml
 ```
 
 You should see a successful output similar to this :
 
 ```
-fleetautoscaler.stable.agones.sev "simple-udp-autoscaler" created
+fleetautoscaler.autoscaling.agones.dev "simple-udp-autoscaler" created
 ```
 
 This has created a FleetAutoscaler record inside Kubernetes.
@@ -48,24 +48,24 @@ It should look something like this:
 Name:         simple-udp-autoscaler
 Namespace:    default
 Labels:       <none>
-Annotations:  kubectl.kubernetes.io/last-applied-configuration={"apiVersion":"st
-able.agones.dev/v1alpha1","kind":"FleetAutoscaler","metadata":{"annotations":{},
+Annotations:  kubectl.kubernetes.io/last-applied-configuration={"apiVersion":"au
+toscaling.agones.dev/v1","kind":"FleetAutoscaler","metadata":{"annotations":{},
 "name":"simple-udp-autoscaler","namespace":"default"},...
-API Version:  stable.agones.dev/v1alpha1
+API Version:  autoscaling.agones.dev/v1
 Kind:         FleetAutoscaler
 Metadata:
   Cluster Name:
   Creation Timestamp:  2018-10-02T15:19:58Z
   Generation:          1
   Owner References:
-    API Version:           stable.agones.dev/v1alpha1
+    API Version:           autoscaling.agones.dev/v1
     Block Owner Deletion:  true
     Controller:            true
     Kind:                  Fleet
     Name:                  simple-udp
     UID:                   9960762e-c656-11e8-933e-fa163e07a1d4
   Resource Version:        6123197
-  Self Link:               /apis/stable.agones.dev/v1alpha1/namespaces/default/f
+  Self Link:               /apis/autoscaling.agones.dev/v1/namespaces/default/f
 leetautoscalers/simple-udp-autoscaler
   UID:                     9fd0efa1-c656-11e8-933e-fa163e07a1d4
 Spec:
@@ -97,18 +97,19 @@ If you're interested in more details for game server allocation, you should cons
 In here we are only interested in triggering allocations to see the autoscaler in action.
 
 ```
-kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/simple-udp/fleetallocation.yaml -o yaml
+kubectl create -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/gameserverallocation.yaml -o yaml
 ```
 
 You should get in return the allocated game server details, which should end with something like:
 ```
-    status:
-      address: 10.30.64.99
-      nodeName: universal3
-      ports:
-      - name: default
-        port: 7131
-      state: Allocated
+status:
+  address: 34.94.118.237
+  gameServerName: simple-udp-v6jwb-6bzkz
+  nodeName: gke-test-cluster-default-f11755a7-5km3
+  ports:
+  - name: default
+    port: 7832
+  state: Allocated
 ```
 
 Note the address and port, you might need them later to connect to the server.
@@ -168,7 +169,7 @@ Since we've only got one allocation, we'll just grab the details of the IP and p
 only allocated `GameServer`: 
 
 ```
-kubectl get $(kubectl get fleetallocation -o name) -o jsonpath='{.status.GameServer.status.GameServer.status.ports[0].port}'
+kubectl get gameservers | grep Allocated | awk '{print $3":"$4 }'
 ```
 
 This should output your Game Server IP address and port. (eg `10.130.65.208:7936`)

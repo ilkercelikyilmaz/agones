@@ -26,7 +26,7 @@ For example, to set a CPU limit on our `GameServer` configuration of 250m/0.25 o
 we could do so as followed:
 
 ```yaml
-apiVersion: "stable.agones.dev/v1alpha1"
+apiVersion: "agones.dev/v1"
 kind: GameServer
 metadata:
   name: "simple-udp"
@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
       - name: simple-udp
-        image: gcr.io/agones-images/udp-server:0.9
+        image: {{% example-image %}}
         resources:
           limit:
             cpu: "250m" #this is our limit here

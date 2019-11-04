@@ -3,10 +3,36 @@ title: "Install and configure Agones on Kubernetes"
 linkTitle: "Installation"
 weight: 4
 description: >
-  Follow this guide to create a cluster on Google Kubernetes Engine (GKE), Minikube or Azure Kubernetes Service (AKS), and install Agones.
+  Follow this guide to create a cluster on Google Kubernetes Engine (GKE), Minikube, Amazon Elastic Kubernetes Service (EKS), or Azure Kubernetes Service (AKS), and install Agones.
 ---
 
 In this quickstart, we will create a Kubernetes cluster, and populate it with the resource types that power Agones.
+
+{{< alert title="Note" color="info">}}
+When running in production, Agones should be scheduled on a dedicated pool of nodes, distinct from where Game Servers
+are scheduled for better isolation and resiliency. By default Agones prefers to be scheduled on nodes labeled with
+`agones.dev/agones-system=true` and tolerates the node taint `agones.dev/agones-system=true:NoExecute`.
+If no dedicated nodes are available, Agones will run on regular nodes.
+{{< /alert >}}
+
+## Usage Requirements
+
+- Kubernetes cluster version 1.12
+    - [Minikube](https://github.com/kubernetes/minikube), [Kind](https://github.com/kubernetes-sigs/kind), [Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine/),
+      [Azure Kubernetes Service](https://azure.microsoft.com/en-us/services/kubernetes-service/) and [Amazon EKS](https://aws.amazon.com/eks/) have been tested
+    - If you are creating and managing your own Kubernetes cluster, the
+    [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook-beta-in-19), and
+    [ValidatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#validatingadmissionwebhook-alpha-in-18-beta-in-19)
+    admission controllers are required.
+    We also recommend following the
+    [recommended set of admission controllers](https://kubernetes.io/docs/admin/admission-controllers/#is-there-a-recommended-set-of-admission-controllers-to-use).
+- Firewall access for the range of ports that Game Servers can be connected to in the cluster.
+- Game Servers must have the [game server SDK]({{< ref "/docs/Guides/Client SDKs/_index.md"  >}}) integrated, to manage Game Server state, health checking, etc.
+
+{{< alert title="Warning" color="warning">}}
+Later versions of Kubernetes may work, but this project is tested against 1.12, and is therefore the supported version.
+Agones will update its support to n-1 version of what is available across all major cloud providers - GKE, EKS and AKS
+{{< /alert >}}
 
 ## Setting up a Google Kubernetes Engine (GKE) cluster
 
@@ -75,25 +101,54 @@ To install `gcloud` and `kubectl`, perform the following steps:
 A [cluster][cluster] consists of at least one *cluster master* machine and multiple worker machines called *nodes*: [Compute Engine virtual machine][vms] instances that run the Kubernetes processes necessary to make them part of the cluster.
 
 ```bash
-gcloud container clusters create [CLUSTER_NAME] --cluster-version=1.11 \
-  --no-enable-legacy-authorization \
+gcloud container clusters create [CLUSTER_NAME] --cluster-version=1.12 \
   --tags=game-server \
-  --enable-basic-auth \
-  --password=supersecretpassword \
   --scopes=gke-default \
-  --num-nodes=3 \
-  --machine-type=n1-standard-2
+  --num-nodes=4 \
+  --no-enable-autoupgrade \
+  --machine-type=n1-standard-4
 ```
 
 Flag explanations:
 
-* cluster-version: Agones requires Kubernetes version 1.11+.
-* no-enable-legacy-authorization: This enables RBAC, the authorization scheme used by Agones to control access to resources.
+* cluster-version: Agones requires Kubernetes version 1.12.
 * tags: Defines the tags that will be attached to new nodes in the cluster. This is to grant access through ports via the firewall created in the next step.
-* enable-basic-auth/password: Sets the master auth scheme for interacting with the cluster.
 * scopes: Defines the Oauth scopes required by the nodes.
-* num-nodes: The number of nodes to be created in each of the cluster's zones. Default: 3
-* machine-type: The type of machine to use for nodes. Default: n1-standard-2. Depending on the needs of you game, you may wish to [have a bigger machines](https://cloud.google.com/compute/docs/machine-types).
+* num-nodes: The number of nodes to be created in each of the cluster's zones. Default: 4. Depending on the needs of your game, this parameter should be adjusted.
+* no-enable-autoupgrade: Disable automatic upgrades for nodes to reduce the likelihood of in-use games being disrupted.
+* machine-type: The type of machine to use for nodes. Default: n1-standard-4. Depending on the needs of your game, you may wish to [have smaller or larger machines](https://cloud.google.com/compute/docs/machine-types).
+
+_Optional_: Create a dedicated node pool for the Agones controllers. If you choose to skip this step, the Agones
+controllers will share the default node pool with your game servers which is fine for kicking the tires but is not
+recommended for a production deployment.
+
+```bash
+gcloud container node-pools create agones-system \
+  --cluster=[CLUSTER_NAME] \
+  --no-enable-autoupgrade \
+  --node-taints agones.dev/agones-system=true:NoExecute \
+  --node-labels agones.dev/agones-system=true \
+  --num-nodes=1
+```
+
+_Optional_: Create a node pool for [Metrics]({{< relref "../Guides/metrics.md" >}}) if you want to monitor the Agones system using Prometheus with Grafana or Stackdriver.
+
+```bash
+gcloud container node-pools create agones-metrics \
+  --cluster=[CLUSTER_NAME] \
+  --no-enable-autoupgrade \
+  --node-taints agones.dev/agones-metrics=true:NoExecute \
+  --node-labels agones.dev/agones-metrics=true \
+  --num-nodes=1
+```
+
+Flag explanations:
+
+* cluster: The name of the cluster in which the node pool is created.
+* no-enable-autoupgrade: Disable automatic upgrades for nodes to reduce the likelihood of in-use games being disrupted.
+* node-taints: The Kubernetes taints to automatically apply to nodes in this node pool.
+* node-labels: The Kubernetes labels to automatically apply to nodes in this node pool.
+* num-nodes: The Agones system controllers only require a single node of capacity to run. For faster recovery time in the event of a node failure, you can increase the size to 2.
 
 Finally, let's tell `gcloud` that we are speaking with this cluster, and get auth credentials for `kubectl` to use.
 
@@ -115,8 +170,6 @@ gcloud compute firewall-rules create game-server-firewall \
   --target-tags game-server \
   --description "Firewall to allow game server udp traffic"
 ```
-
-Continue to [Enabling creation of RBAC resources](#enabling-creation-of-rbac-resources)
 
 ## Setting up a Minikube cluster
 
@@ -144,32 +197,44 @@ The following command starts a local minikube cluster via virtualbox - but this 
 replaced by a [vm-driver](https://github.com/kubernetes/minikube#requirements) of your choice.
 
 ```bash
-minikube start --kubernetes-version v1.11.0 --vm-driver virtualbox \
-		--extra-config=apiserver.authorization-mode=RBAC
+minikube start --kubernetes-version v1.12.10 --vm-driver virtualbox
 ```
-
-Continue to [Enabling creation of RBAC resources](#enabling-creation-of-rbac-resources)
 
 ## Setting up an Amazon Web Services EKS cluster
 
-### Create EKS Instance
+### Create EKS Cluster
 
-Create your EKS instance using the [Getting Started Guide](https://docs.aws.amazon.com/eks/latest/userguide/getting-started.html).
+Create your EKS Cluster using the [Getting Started Guide](https://docs.aws.amazon.com/eks/latest/userguide/getting-started.html).
 
-### Ensure VPC CNI 1.2 is Running
-
-EKS does not use the normal Kubernetes networking since it is [incompatible with Amazon VPC networking](https://www.contino.io/insights/kubernetes-is-hard-why-eks-makes-it-easier-for-network-and-security-architects). 
-
-In a console, run this command to get your current cni version
-
-```bash
-kubectl describe daemonset aws-node --namespace kube-system | grep Image | cut -d "/" -f 2
+Possible steps are the following:
+1. Create new IAM role for cluster management.
+1. Run `aws configure` to authorize your `awscli` with proper `AWS Access Key ID` and `AWS Secret Access Key`.
+1. Create an example cluster:
 ```
-Output should be `amazon-k8s-cni:1.2.0` or newer. To upgrade to version 1.2, run the following command.
-
-```bash
-kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/master/config/v1.2/aws-k8s-cni.yaml
+eksctl create cluster \
+--name prod \
+--version 1.12 \
+--nodegroup-name standard-workers \
+--node-type t3.medium \
+--nodes 3 \
+--nodes-min 3 \
+--nodes-max 4 \
+--node-ami auto
 ```
+
+{{< alert title="Note" color="info">}}
+EKS does not use the normal Kubernetes networking since it is [incompatible with Amazon VPC networking](https://www.contino.io/insights/kubernetes-is-hard-why-eks-makes-it-easier-for-network-and-security-architects).
+{{< /alert >}}
+
+#### Allowing UDP Traffic
+
+For Agones to work correctly, we need to allow UDP traffic to pass through to our EKS cluster worker nodes. To achieve this, we must update the workers' nodepool SG (Security Group) with the proper rule. A simple way to do that is:
+
+* Login to the AWS Management Console
+* Go to the VPC Dashboard and select **Security Groups**
+* Find the Security Group for the workers nodepool, which will be named something like `eksctl-[cluster-name]-nodegroup-[cluster-name]-workers/SG`
+* Select **Inbound Rules**
+* **Edit Rules** to add a new **Custom UDP Rule** with a 7000-8000 port range and an appropriate **Source** CIDR range (`0.0.0.0/0` allows all traffic)
 
 ### Follow Normal Instructions to Install
 
@@ -187,7 +252,7 @@ You can use either [Azure Cloud Shell](https://docs.microsoft.com/azure/cloud-sh
 
 If you are using Azure CLI from your local shell, you need to login to your Azure account by executing the `az login` command and following the login procedure.
 
-Here are the steps you need to follow to create a new AKS cluster (additional instructions and clarifications are listed [here](https://docs.microsoft.com/azure/aks/kubernetes-walkthrough)): 
+Here are the steps you need to follow to create a new AKS cluster (additional instructions and clarifications are listed [here](https://docs.microsoft.com/azure/aks/kubernetes-walkthrough)):
 
 ```bash
 # Declare necessary variables, modify them according to your needs
@@ -242,19 +307,6 @@ Nodes in AKS don't get a Public IP by default. To assign a Public IP to a Node, 
 
 Continue to [Installing Agones](#installing-agones).
 
-## Enabling creation of RBAC resources
-
-To install Agones, a service account needs permission to create some special RBAC resource types.
-
-```bash
-# Kubernetes Engine
-kubectl create clusterrolebinding cluster-admin-binding \
-  --clusterrole cluster-admin --user `gcloud config get-value account`
-# Minikube
-kubectl create clusterrolebinding cluster-admin-binding \
-  --clusterrole=cluster-admin --serviceaccount=kube-system:default
-```
-
 ## Installing Agones
 
 This will install Agones in your cluster.
@@ -262,18 +314,20 @@ This will install Agones in your cluster.
 ### Install with YAML
 
 We can install Agones to the cluster using the
-[install.yaml](https://github.com/GoogleCloudPlatform/agones/blob/{{< release-branch >}}/install/yaml/install.yaml) file.
+[install.yaml](https://github.com/googleforgames/agones/blob/{{< release-branch >}}/install/yaml/install.yaml) file.
 
 ```bash
 kubectl create namespace agones-system
-kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/install/yaml/install.yaml
+kubectl apply -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/install/yaml/install.yaml
 ```
 
-You can also find the install.yaml in the latest `agones-install` zip from the [releases](https://github.com/GoogleCloudPlatform/agones/releases) archive.
+You can also find the install.yaml in the latest `agones-install` zip from the [releases](https://github.com/googleforgames/agones/releases) archive.
 
-> Note: Installing Agones with the `install.yaml` will setup the TLS certificates stored in this repository for securing
-> kubernetes webhooks communication. If you want to generate new certificates or use your own,
-> we recommend using the helm installation.
+{{< alert title="Warning" color="warning">}}
+Installing Agones with the `install.yaml` will setup the TLS certificates stored in this repository for securing
+kubernetes webhooks communication. If you want to generate new certificates or use your own,
+we recommend using the helm installation.
+{{< /alert >}}
 
 ### Install using Helm
 
@@ -291,14 +345,30 @@ To confirm Agones is up and running, run the following command:
 kubectl describe --namespace agones-system pods
 ```
 
-It should describe the single pod created in the `agones-system` namespace, with no error messages or status. The `Conditions` section should look like this:
+It should describe six pods created in the `agones-system` namespace, with no error messages or status. All `Conditions` sections should look like this:
 
 ```
 Conditions:
-  Type           Status
-  Initialized    True
-  Ready          True
-  PodScheduled   True
+  Type              Status
+  Initialized       True
+  Ready             True
+  ContainersReady   True
+  PodScheduled      True
+```
+
+All this pods should be in a `RUNNING` state:
+
+
+```bash
+kubectl get pods --namespace agones-system
+
+NAME                                 READY   STATUS    RESTARTS   AGE
+agones-allocator-5c988b7b8d-cgtbs    1/1     Running   0          8m47s
+agones-allocator-5c988b7b8d-hhhr5    1/1     Running   0          8m47s
+agones-allocator-5c988b7b8d-pv577    1/1     Running   0          8m47s
+agones-controller-7db45966db-56l66   1/1     Running   0          8m44s
+agones-ping-84c64f6c9d-bdlzh         1/1     Running   0          8m37s
+agones-ping-84c64f6c9d-sjgzz         1/1     Running   0          8m47s
 ```
 
 That's it! This creates the [Custom Resource Definitions][crds] that power Agones and allows us to define resources of type `GameServer`.

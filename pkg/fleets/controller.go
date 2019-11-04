@@ -16,15 +16,16 @@ package fleets
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"time"
 
-	"agones.dev/agones/pkg/apis/stable"
-	"agones.dev/agones/pkg/apis/stable/v1alpha1"
-	stablev1alpha1 "agones.dev/agones/pkg/apis/stable/v1alpha1"
+	"agones.dev/agones/pkg/apis/agones"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	"agones.dev/agones/pkg/client/clientset/versioned"
-	getterv1alpha1 "agones.dev/agones/pkg/client/clientset/versioned/typed/stable/v1alpha1"
+	getterv1 "agones.dev/agones/pkg/client/clientset/versioned/typed/agones/v1"
 	"agones.dev/agones/pkg/client/informers/externalversions"
-	listerv1alpha1 "agones.dev/agones/pkg/client/listers/stable/v1alpha1"
+	listerv1 "agones.dev/agones/pkg/client/listers/agones/v1"
 	"agones.dev/agones/pkg/util/crd"
 	"agones.dev/agones/pkg/util/logfields"
 	"agones.dev/agones/pkg/util/runtime"
@@ -53,11 +54,11 @@ import (
 type Controller struct {
 	baseLogger          *logrus.Entry
 	crdGetter           v1beta1.CustomResourceDefinitionInterface
-	gameServerSetGetter getterv1alpha1.GameServerSetsGetter
-	gameServerSetLister listerv1alpha1.GameServerSetLister
+	gameServerSetGetter getterv1.GameServerSetsGetter
+	gameServerSetLister listerv1.GameServerSetLister
 	gameServerSetSynced cache.InformerSynced
-	fleetGetter         getterv1alpha1.FleetsGetter
-	fleetLister         listerv1alpha1.FleetLister
+	fleetGetter         getterv1.FleetsGetter
+	fleetLister         listerv1.FleetLister
 	fleetSynced         cache.InformerSynced
 	workerqueue         *workerqueue.WorkerQueue
 	recorder            record.EventRecorder
@@ -72,24 +73,24 @@ func NewController(
 	agonesClient versioned.Interface,
 	agonesInformerFactory externalversions.SharedInformerFactory) *Controller {
 
-	gameServerSets := agonesInformerFactory.Stable().V1alpha1().GameServerSets()
+	gameServerSets := agonesInformerFactory.Agones().V1().GameServerSets()
 	gsSetInformer := gameServerSets.Informer()
 
-	fleets := agonesInformerFactory.Stable().V1alpha1().Fleets()
+	fleets := agonesInformerFactory.Agones().V1().Fleets()
 	fInformer := fleets.Informer()
 
 	c := &Controller{
 		crdGetter:           extClient.ApiextensionsV1beta1().CustomResourceDefinitions(),
-		gameServerSetGetter: agonesClient.StableV1alpha1(),
+		gameServerSetGetter: agonesClient.AgonesV1(),
 		gameServerSetLister: gameServerSets.Lister(),
 		gameServerSetSynced: gsSetInformer.HasSynced,
-		fleetGetter:         agonesClient.StableV1alpha1(),
+		fleetGetter:         agonesClient.AgonesV1(),
 		fleetLister:         fleets.Lister(),
 		fleetSynced:         fInformer.HasSynced,
 	}
 
 	c.baseLogger = runtime.NewLoggerWithType(c)
-	c.workerqueue = workerqueue.NewWorkerQueue(c.syncFleet, c.baseLogger, logfields.FleetKey, stable.GroupName+".FleetController")
+	c.workerqueue = workerqueue.NewWorkerQueueWithRateLimiter(c.syncFleet, c.baseLogger, logfields.FleetKey, agones.GroupName+".FleetController", workerqueue.FastRateLimiter(3*time.Second))
 	health.AddLivenessCheck("fleet-workerqueue", healthcheck.Check(c.workerqueue.Healthy))
 
 	eventBroadcaster := record.NewBroadcaster()
@@ -97,9 +98,9 @@ func NewController(
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 	c.recorder = eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "fleet-controller"})
 
-	wh.AddHandler("/mutate", stablev1alpha1.Kind("Fleet"), admv1beta1.Create, c.creationMutationHandler)
-	wh.AddHandler("/validate", v1alpha1.Kind("Fleet"), admv1beta1.Create, c.creationValidationHandler)
-	wh.AddHandler("/validate", v1alpha1.Kind("Fleet"), admv1beta1.Update, c.creationValidationHandler)
+	wh.AddHandler("/mutate", agonesv1.Kind("Fleet"), admv1beta1.Create, c.creationMutationHandler)
+	wh.AddHandler("/validate", agonesv1.Kind("Fleet"), admv1beta1.Create, c.creationValidationHandler)
+	wh.AddHandler("/validate", agonesv1.Kind("Fleet"), admv1beta1.Update, c.creationValidationHandler)
 
 	fInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: c.workerqueue.Enqueue,
@@ -111,7 +112,7 @@ func NewController(
 	gsSetInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: c.gameServerSetEventHandler,
 		UpdateFunc: func(_, newObj interface{}) {
-			gsSet := newObj.(*stablev1alpha1.GameServerSet)
+			gsSet := newObj.(*agonesv1.GameServerSet)
 			// ignore if already being deleted
 			if gsSet.ObjectMeta.DeletionTimestamp.IsZero() {
 				c.gameServerSetEventHandler(gsSet)
@@ -130,7 +131,7 @@ func (c *Controller) creationMutationHandler(review admv1beta1.AdmissionReview) 
 	c.baseLogger.WithField("review", review).Info("creationMutationHandler")
 
 	obj := review.Request.Object
-	fleet := &stablev1alpha1.Fleet{}
+	fleet := &agonesv1.Fleet{}
 	err := json.Unmarshal(obj.Raw, fleet)
 	if err != nil {
 		return review, errors.Wrapf(err, "error unmarshalling original Fleet json: %s", obj.Raw)
@@ -170,7 +171,7 @@ func (c *Controller) creationValidationHandler(review admv1beta1.AdmissionReview
 	c.baseLogger.WithField("review", review).Info("creationValidationHandler")
 
 	obj := review.Request.Object
-	fleet := &stablev1alpha1.Fleet{}
+	fleet := &agonesv1.Fleet{}
 	err := json.Unmarshal(obj.Raw, fleet)
 	if err != nil {
 		return review, errors.Wrapf(err, "error unmarshalling original Fleet json: %s", obj.Raw)
@@ -202,7 +203,7 @@ func (c *Controller) creationValidationHandler(review admv1beta1.AdmissionReview
 // Run the Fleet controller. Will block until stop is closed.
 // Runs threadiness number workers to process the rate limited queue
 func (c *Controller) Run(workers int, stop <-chan struct{}) error {
-	err := crd.WaitForEstablishedCRD(c.crdGetter, "fleets.stable.agones.dev", c.baseLogger)
+	err := crd.WaitForEstablishedCRD(c.crdGetter, "fleets.agones.dev", c.baseLogger)
 	if err != nil {
 		return err
 	}
@@ -220,7 +221,7 @@ func (c *Controller) loggerForFleetKey(key string) *logrus.Entry {
 	return logfields.AugmentLogEntry(c.baseLogger, logfields.FleetKey, key)
 }
 
-func (c *Controller) loggerForFleet(f *v1alpha1.Fleet) *logrus.Entry {
+func (c *Controller) loggerForFleet(f *agonesv1.Fleet) *logrus.Entry {
 	fleetName := "NilFleet"
 	if f != nil {
 		fleetName = f.ObjectMeta.Namespace + "/" + f.ObjectMeta.Name
@@ -231,7 +232,7 @@ func (c *Controller) loggerForFleet(f *v1alpha1.Fleet) *logrus.Entry {
 // gameServerSetEventHandler enqueues the owning Fleet for this GameServerSet,
 // assuming that it has one
 func (c *Controller) gameServerSetEventHandler(obj interface{}) {
-	gsSet := obj.(*stablev1alpha1.GameServerSet)
+	gsSet := obj.(*agonesv1.GameServerSet)
 	ref := metav1.GetControllerOf(gsSet)
 	if ref == nil {
 		return
@@ -302,7 +303,7 @@ func (c *Controller) syncFleet(key string) error {
 // upsertGameServerSet if the GameServerSet is new, insert it
 // if the replicas do not match the active
 // GameServerSet, then update it
-func (c *Controller) upsertGameServerSet(fleet *stablev1alpha1.Fleet, active *stablev1alpha1.GameServerSet, replicas int32) error {
+func (c *Controller) upsertGameServerSet(fleet *agonesv1.Fleet, active *agonesv1.GameServerSet, replicas int32) error {
 	if active.ObjectMeta.UID == "" {
 		active.Spec.Replicas = replicas
 		gsSets := c.gameServerSetGetter.GameServerSets(active.ObjectMeta.Namespace)
@@ -345,9 +346,10 @@ func (c *Controller) upsertGameServerSet(fleet *stablev1alpha1.Fleet, active *st
 
 // applyDeploymentStrategy applies the Fleet > Spec > Deployment strategy to all the non-active
 // GameServerSets that are passed in
-func (c *Controller) applyDeploymentStrategy(fleet *stablev1alpha1.Fleet, active *stablev1alpha1.GameServerSet, rest []*stablev1alpha1.GameServerSet) (int32, error) {
+func (c *Controller) applyDeploymentStrategy(fleet *agonesv1.Fleet, active *agonesv1.GameServerSet, rest []*agonesv1.GameServerSet) (int32, error) {
 	// if there is nothing `rest`, then it's either brand Fleet, or we can just jump to the fleet value,
 	// since there is nothing else scaling down at this point
+
 	if len(rest) == 0 {
 		return fleet.Spec.Replicas, nil
 	}
@@ -364,10 +366,10 @@ func (c *Controller) applyDeploymentStrategy(fleet *stablev1alpha1.Fleet, active
 
 // deleteEmptyGameServerSets deletes all GameServerServerSets
 // That have `Status > Replicas` of 0
-func (c *Controller) deleteEmptyGameServerSets(fleet *stablev1alpha1.Fleet, list []*stablev1alpha1.GameServerSet) error {
+func (c *Controller) deleteEmptyGameServerSets(fleet *agonesv1.Fleet, list []*agonesv1.GameServerSet) error {
 	p := metav1.DeletePropagationBackground
 	for _, gsSet := range list {
-		if gsSet.Status.Replicas == 0 {
+		if gsSet.Status.Replicas == 0 && gsSet.Status.ShutdownReplicas == 0 {
 			err := c.gameServerSetGetter.GameServerSets(gsSet.ObjectMeta.Namespace).Delete(gsSet.ObjectMeta.Name, &metav1.DeleteOptions{PropagationPolicy: &p})
 			if err != nil {
 				return errors.Wrapf(err, "error updating gameserverset %s", gsSet.ObjectMeta.Name)
@@ -382,7 +384,7 @@ func (c *Controller) deleteEmptyGameServerSets(fleet *stablev1alpha1.Fleet, list
 
 // recreateDeployment applies the recreate deployment strategy to all non-active
 // GameServerSets, and return the replica count for the active GameServerSet
-func (c *Controller) recreateDeployment(fleet *stablev1alpha1.Fleet, rest []*stablev1alpha1.GameServerSet) (int32, error) {
+func (c *Controller) recreateDeployment(fleet *agonesv1.Fleet, rest []*agonesv1.GameServerSet) (int32, error) {
 	for _, gsSet := range rest {
 		if gsSet.Spec.Replicas != 0 {
 			c.loggerForFleet(fleet).WithField("gameserverset", gsSet.ObjectMeta.Name).Info("applying recreate deployment: scaling to 0")
@@ -396,13 +398,13 @@ func (c *Controller) recreateDeployment(fleet *stablev1alpha1.Fleet, rest []*sta
 		}
 	}
 
-	return fleet.LowerBoundReplicas(fleet.Spec.Replicas - stablev1alpha1.SumStatusAllocatedReplicas(rest)), nil
+	return fleet.LowerBoundReplicas(fleet.Spec.Replicas - agonesv1.SumStatusAllocatedReplicas(rest)), nil
 }
 
 // rollingUpdateDeployment will do the rolling update of the old GameServers
 // through to the new ones, based on the fleet.Spec.Strategy.RollingUpdate configuration
 // and return the replica count for the active GameServerSet
-func (c *Controller) rollingUpdateDeployment(fleet *stablev1alpha1.Fleet, active *stablev1alpha1.GameServerSet, rest []*stablev1alpha1.GameServerSet) (int32, error) {
+func (c *Controller) rollingUpdateDeployment(fleet *agonesv1.Fleet, active *agonesv1.GameServerSet, rest []*agonesv1.GameServerSet) (int32, error) {
 	replicas, err := c.rollingUpdateActive(fleet, active, rest)
 	if err != nil {
 		return replicas, err
@@ -415,10 +417,10 @@ func (c *Controller) rollingUpdateDeployment(fleet *stablev1alpha1.Fleet, active
 
 // rollingUpdateActive applies the rolling update to the active GameServerSet
 // and returns what its replica value should be set to
-func (c *Controller) rollingUpdateActive(fleet *stablev1alpha1.Fleet, active *stablev1alpha1.GameServerSet, rest []*stablev1alpha1.GameServerSet) (int32, error) {
+func (c *Controller) rollingUpdateActive(fleet *agonesv1.Fleet, active *agonesv1.GameServerSet, rest []*agonesv1.GameServerSet) (int32, error) {
 	replicas := active.Spec.Replicas
 	// always leave room for Allocated GameServers
-	sumAllocated := stablev1alpha1.SumStatusAllocatedReplicas(rest)
+	sumAllocated := agonesv1.SumStatusAllocatedReplicas(rest)
 
 	// if the active spec replicas are greater than or equal the fleet spec replicas, then we don't
 	// need to another rolling update upwards.
@@ -441,7 +443,7 @@ func (c *Controller) rollingUpdateActive(fleet *stablev1alpha1.Fleet, active *st
 	// make sure we don't end up with more than the configured max surge
 	maxSurge := surge + fleet.Spec.Replicas
 	replicas = fleet.UpperBoundReplicas(replicas + surge)
-	total := stablev1alpha1.SumStatusReplicas(rest) + replicas
+	total := agonesv1.SumStatusReplicas(rest) + replicas
 	if total > maxSurge {
 		replicas = fleet.LowerBoundReplicas(replicas - (total - maxSurge))
 	}
@@ -458,7 +460,7 @@ func (c *Controller) rollingUpdateActive(fleet *stablev1alpha1.Fleet, active *st
 }
 
 // rollingUpdateRest applies the rolling update to the inactive GameServerSets
-func (c *Controller) rollingUpdateRest(fleet *stablev1alpha1.Fleet, rest []*stablev1alpha1.GameServerSet) error {
+func (c *Controller) rollingUpdateRest(fleet *agonesv1.Fleet, rest []*agonesv1.GameServerSet) error {
 	if len(rest) == 0 {
 		return nil
 	}
@@ -475,34 +477,37 @@ func (c *Controller) rollingUpdateRest(fleet *stablev1alpha1.Fleet, rest []*stab
 		if gsSet.Status.Replicas <= 0 {
 			continue
 		}
+
 		// If the Spec.Replicas does not equal the Status.Replicas for this GameServerSet, this means
 		// that the rolling down process is currently ongoing, and we should therefore exit so we can wait for it to finish
 		if gsSet.Spec.Replicas != gsSet.Status.Replicas {
 			break
 		}
-
 		gsSetCopy := gsSet.DeepCopy()
-		gsSetCopy.Spec.Replicas = fleet.LowerBoundReplicas(gsSetCopy.Spec.Replicas - unavailable)
+		if gsSet.Status.ShutdownReplicas == 0 {
+			gsSetCopy.Spec.Replicas = fleet.LowerBoundReplicas(gsSetCopy.Spec.Replicas - unavailable)
 
-		c.loggerForFleet(fleet).WithField("gameserverset", gsSet.ObjectMeta.Name).WithField("replicas", gsSetCopy.Spec.Replicas).
-			Info("applying rolling update to inactive gameserverset")
+			c.loggerForFleet(fleet).Info(fmt.Sprintf("Shutdownreplicas %d", gsSet.Status.ShutdownReplicas))
+			c.loggerForFleet(fleet).WithField("gameserverset", gsSet.ObjectMeta.Name).WithField("replicas", gsSetCopy.Spec.Replicas).
+				Info("applying rolling update to inactive gameserverset")
 
-		if _, err := c.gameServerSetGetter.GameServerSets(gsSetCopy.ObjectMeta.Namespace).Update(gsSetCopy); err != nil {
-			return errors.Wrapf(err, "error updating gameserverset %s", gsSetCopy.ObjectMeta.Name)
+			if _, err := c.gameServerSetGetter.GameServerSets(gsSetCopy.ObjectMeta.Namespace).Update(gsSetCopy); err != nil {
+				return errors.Wrapf(err, "error updating gameserverset %s", gsSetCopy.ObjectMeta.Name)
+			}
+			c.recorder.Eventf(fleet, corev1.EventTypeNormal, "ScalingGameServerSet",
+				"Scaling inactive GameServerSet %s from %d to %d", gsSetCopy.ObjectMeta.Name, gsSet.Spec.Replicas, gsSetCopy.Spec.Replicas)
+
+			// let's update just one at a time, slightly slower, but a simpler solution that doesn't require us
+			// to make sure we don't overshoot the amount that is being shutdown at any given point and time
+			break
 		}
-		c.recorder.Eventf(fleet, corev1.EventTypeNormal, "ScalingGameServerSet",
-			"Scaling inactive GameServerSet %s from %d to %d", gsSetCopy.ObjectMeta.Name, gsSet.Spec.Replicas, gsSetCopy.Spec.Replicas)
-
-		// let's update just one at a time, slightly slower, but a simpler solution that doesn't require us
-		// to make sure we don't overshoot the amount that is being shutdown at any given point and time
-		break
 	}
 	return nil
 }
 
 // updateFleetStatus gets the GameServerSets for this Fleet and then
 // calculates the counts for the status, and updates the Fleet
-func (c *Controller) updateFleetStatus(fleet *stablev1alpha1.Fleet) error {
+func (c *Controller) updateFleetStatus(fleet *agonesv1.Fleet) error {
 	c.loggerForFleet(fleet).Info("Update Fleet Status")
 
 	list, err := ListGameServerSetsByFleetOwner(c.gameServerSetLister, fleet)
@@ -532,9 +537,9 @@ func (c *Controller) updateFleetStatus(fleet *stablev1alpha1.Fleet) error {
 // filterGameServerSetByActive returns the active GameServerSet (or nil if it
 // doesn't exist) and then the rest of the GameServerSets that are controlled
 // by this Fleet
-func (c *Controller) filterGameServerSetByActive(fleet *stablev1alpha1.Fleet, list []*stablev1alpha1.GameServerSet) (*stablev1alpha1.GameServerSet, []*stablev1alpha1.GameServerSet) {
-	var active *stablev1alpha1.GameServerSet
-	var rest []*stablev1alpha1.GameServerSet
+func (c *Controller) filterGameServerSetByActive(fleet *agonesv1.Fleet, list []*agonesv1.GameServerSet) (*agonesv1.GameServerSet, []*agonesv1.GameServerSet) {
+	var active *agonesv1.GameServerSet
+	var rest []*agonesv1.GameServerSet
 
 	for _, gsSet := range list {
 		if reflect.DeepEqual(gsSet.Spec.Template, fleet.Spec.Template) {

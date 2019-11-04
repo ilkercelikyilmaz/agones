@@ -4,11 +4,11 @@ linkTitle: "Create an Allocator Service (Go)"
 date: 2019-01-03T03:15:34Z
 description: >
   This tutorial describes how to interact programmatically with the 
-  [Agones API](https://godoc.org/agones.dev/agones/pkg/client/clientset/versioned/typed/stable/v1alpha1).
+  [Agones API](https://godoc.org/agones.dev/agones/pkg/client/clientset/versioned/typed/agones/v1).
 ---
 
 To do this, we will implement a [Service](https://kubernetes.io/docs/concepts/services-networking/service/) which allocates a
-Game Server on demand by calling the Create() method of the FleetAllocationInterface.  After creating the fleet
+Game Server on demand by calling the Create() method of the GameServerAllocationInterface.  After creating the fleet
 allocation, we will return the JSON encoded GameServerStatus of the allocated GameServer.
 
 The type of service we will be learning about could be used by a game client to connect directly to a dedicated Game Server, as part of a larger system, such as a matchmaker service, or in conjunction with a database of level transition data.  We will be using the service as a vehicle with which to execute the API calls found in our main.go file.
@@ -27,7 +27,8 @@ The type of service we will be learning about could be used by a game client to 
 
 To install on GKE, follow the install instructions (if you haven't already) at
 [Setting up a Google Kubernetes Engine (GKE) cluster]({{< relref "../Installation/_index.md#setting-up-a-google-kubernetes-engine-gke-cluster" >}}).
-Also complete the "Enabling creation of RBAC resources" and "Installing Agones" sets of instructions on the same page.
+Also complete the "Installing Agones" instructions on the same page.
+
 
 While not required, you may wish to review the [Create a Game Server]({{< relref "../Getting Started/create-gameserver.md" >}}),
 [Create a Game Server Fleet]({{< relref "../Getting Started/create-fleet.md" >}}), and/or [Edit a Game Server]({{< relref "../Getting Started/edit-first-gameserver-go.md" >}}) quickstarts.
@@ -131,9 +132,8 @@ Create the [secret](https://kubernetes.io/docs/concepts/configuration/secret/) b
 kubectl create secret tls allocatorsecret --cert=/tmp/allocsvc.crt --key=/tmp/allocsvc.key
 ```
 
-The output should be something like:
 ```
-secret "allocatorsecret" created
+secret/allocatorsecret created
 ```
 
 The allocatorw3secret will let data be served by the webserver over https.
@@ -142,9 +142,10 @@ Create the secret by running this command:
 ```
 kubectl create secret tls allocatorw3secret --cert=/tmp/tls.crt --key=/tmp/tls.key
 ```
+
 The output should be something like:
 ```
-secret "allocatorw3secret" created
+secret/allocatorw3secret created
 ```
 
 See that the secrets exist by running:
@@ -163,7 +164,7 @@ allocatorw3secret        kubernetes.io/tls                     2         15s
 
 
 ### 5. Create the Service Account
-This service will interact with Agones via the Agones API by using a [service account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) named fleet-allocator.  Specifically, the fleet-allocator service account is granted permissions to perform create operations against FleetAllocation objects, and get operations against Fleet objects.
+This service will interact with Agones via the Agones API by using a [service account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) named fleet-allocator.  Specifically, the fleet-allocator service account is granted permissions to perform create operations against GameServerAllocation objects, and get operations against Fleet objects.
 
 Create the service account by changing directories to your local agones/examples/allocator-service directory and running this command:
 ```
@@ -172,11 +173,10 @@ kubectl create -f service-account.yaml
 
 The output should look like this:
 ```
-role "fleet-allocator" created
-serviceaccount "fleet-allocator" created
-rolebinding "fleet-allocator" created
+role.rbac.authorization.k8s.io/fleet-allocator created
+serviceaccount/fleet-allocator created
+rolebinding.rbac.authorization.k8s.io/fleet-allocator created
 ```
-
 
 ### 6. Define and Deploy the Service
 The service definition defines a [nodePort](https://kubernetes.io/docs/concepts/services-networking/service/#nodeport) service which uses https, and sets up ports and names.  The deployment describes the number of replicas we would like, which account to use, which image to use, and defines a health check.
@@ -188,10 +188,9 @@ kubectl create -f allocator-service.yaml
 
 The output should look like this:
 ```
-service "fleet-allocator-backend" created
-deployment "fleet-allocator" created
+service/fleet-allocator-backend created
+deployment.apps/fleet-allocator created
 ```
-
 
 ### 7. Deploy the Ingress Resource
 This [Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) directs traffic to the allocator service using an ephemeral IP address.  The allocator service pod needs to exist and the readiness probe should be passing health checks before the ingress is created.
@@ -203,7 +202,7 @@ kubectl apply -f allocator-ingress.yaml
 
 The output should look like this:
 ```
-ingress "fleet-allocator-ingress" created
+ingress.extensions/fleet-allocator-ingress created
 ```
 
 
@@ -288,7 +287,7 @@ curl -k -u v1GameClientKey:EAEC945C371B2EC361DE399C2F11E https://[the.ip.address
 
 The output should show the JSON of the GameServerStatus, similar to this:
 ```
-{"status":{"state":"Allocated","ports":[{"name":"default","port":7260}],"address":"35.231.204.26","nodeName":"gke-agones-simple-udp-cluste-default-pool-e03a9bde-000f"}}
+{"status":"Allocated"}
 ```
 
 You may need to wait a few moments longer if the output has ssl errors like this:

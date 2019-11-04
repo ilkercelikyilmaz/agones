@@ -1,4 +1,4 @@
-// Copyright 2019 Google Inc. All Rights Reserved.
+// Copyright 2019 Google LLC All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,21 +17,21 @@ package gameserverallocations
 import (
 	"sync"
 
-	stablev1alpha1 "agones.dev/agones/pkg/apis/stable/v1alpha1"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 )
 
 // gameserver cache to keep the Ready state gameserver.
 type gameServerCacheEntry struct {
 	mu    sync.RWMutex
-	cache map[string]*stablev1alpha1.GameServer
+	cache map[string]*agonesv1.GameServer
 }
 
 // Store saves the data in the cache.
-func (e *gameServerCacheEntry) Store(key string, gs *stablev1alpha1.GameServer) {
+func (e *gameServerCacheEntry) Store(key string, gs *agonesv1.GameServer) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.cache == nil {
-		e.cache = map[string]*stablev1alpha1.GameServer{}
+		e.cache = map[string]*agonesv1.GameServer{}
 	}
 	e.cache[key] = gs.DeepCopy()
 }
@@ -52,7 +52,7 @@ func (e *gameServerCacheEntry) Delete(key string) bool {
 }
 
 // Load returns the data from cache. It return true if the value exists in the cache
-func (e *gameServerCacheEntry) Load(key string) (*stablev1alpha1.GameServer, bool) {
+func (e *gameServerCacheEntry) Load(key string) (*agonesv1.GameServer, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	val, ok := e.cache[key]
@@ -61,7 +61,7 @@ func (e *gameServerCacheEntry) Load(key string) (*stablev1alpha1.GameServer, boo
 }
 
 // Range extracts data from the cache based on provided function f.
-func (e *gameServerCacheEntry) Range(f func(key string, gs *stablev1alpha1.GameServer) bool) {
+func (e *gameServerCacheEntry) Range(f func(key string, gs *agonesv1.GameServer) bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	for k, v := range e.cache {
@@ -69,4 +69,11 @@ func (e *gameServerCacheEntry) Range(f func(key string, gs *stablev1alpha1.GameS
 			break
 		}
 	}
+}
+
+// Len returns the current length of the cache
+func (e *gameServerCacheEntry) Len() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return len(e.cache)
 }

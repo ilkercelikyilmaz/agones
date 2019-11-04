@@ -65,7 +65,7 @@ There are two scheduling strategies for Fleets - each designed for different typ
 ### Packed
 
 ```yaml
-apiVersion: "stable.agones.dev/v1alpha1"
+apiVersion: "agones.dev/v1"
 kind: Fleet
 metadata:
   name: simple-udp
@@ -80,7 +80,7 @@ spec:
         spec:
           containers:
           - name: simple-udp
-            image: gcr.io/agones-images/udp-server:0.9
+            image: {{% example-image %}}
 ```
 
 This is the *default* Fleet scheduling strategy. It is designed for dynamic Kubernetes environments, wherein you wish 
@@ -109,8 +109,10 @@ Under the "Packed" strategy, Pods will be scheduled using the [`PodAffinity`](ht
 with a `preferredDuringSchedulingIgnoredDuringExecution` affinity with [hostname](https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#interlude-built-in-node-labels)
 topology. This attempts to group together `GameServer` Pods within as few nodes in the cluster as it can.
 
-> The default Kubernetes scheduler doesn't do a perfect job of packing, but it's a good enough job for what we need - 
+{{< alert title="Note" color="info">}}
+The default Kubernetes scheduler doesn't do a perfect job of packing, but it's a good enough job for what we need - 
   at least at this stage. 
+{{< /alert >}}
 
 #### Fleet Scale Down Strategy
 
@@ -120,7 +122,7 @@ With the "Packed" strategy, Fleets will remove `Ready` `GameServers` from Nodes 
 ### Distributed
 
 ```yaml
-apiVersion: "stable.agones.dev/v1alpha1"
+apiVersion: "agones.dev/v1"
 kind: Fleet
 metadata:
   name: simple-udp
@@ -135,7 +137,7 @@ spec:
         spec:
           containers:
           - name: simple-udp
-            image: gcr.io/agones-images/udp-server:0.9
+            image: {{% example-image %}}
 ```
 
 This Fleet scheduling strategy is designed for static Kubernetes environments, such as when you are running Kubernetes

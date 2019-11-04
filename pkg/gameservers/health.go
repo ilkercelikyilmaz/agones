@@ -17,15 +17,16 @@ package gameservers
 import (
 	"strings"
 
-	"agones.dev/agones/pkg/apis/stable"
-	"agones.dev/agones/pkg/apis/stable/v1alpha1"
+	"agones.dev/agones/pkg/apis/agones"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	"agones.dev/agones/pkg/client/clientset/versioned"
-	getterv1alpha1 "agones.dev/agones/pkg/client/clientset/versioned/typed/stable/v1alpha1"
+	getterv1 "agones.dev/agones/pkg/client/clientset/versioned/typed/agones/v1"
 	"agones.dev/agones/pkg/client/informers/externalversions"
-	listerv1alpha1 "agones.dev/agones/pkg/client/listers/stable/v1alpha1"
+	listerv1 "agones.dev/agones/pkg/client/listers/agones/v1"
 	"agones.dev/agones/pkg/util/logfields"
 	"agones.dev/agones/pkg/util/runtime"
 	"agones.dev/agones/pkg/util/workerqueue"
+	"github.com/heptiolabs/healthcheck"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -47,26 +48,33 @@ type HealthController struct {
 	baseLogger       *logrus.Entry
 	podSynced        cache.InformerSynced
 	podLister        corelisterv1.PodLister
-	gameServerGetter getterv1alpha1.GameServersGetter
-	gameServerLister listerv1alpha1.GameServerLister
+	gameServerSynced cache.InformerSynced
+	gameServerGetter getterv1.GameServersGetter
+	gameServerLister listerv1.GameServerLister
 	workerqueue      *workerqueue.WorkerQueue
 	recorder         record.EventRecorder
 }
 
 // NewHealthController returns a HealthController
-func NewHealthController(kubeClient kubernetes.Interface, agonesClient versioned.Interface, kubeInformerFactory informers.SharedInformerFactory,
+func NewHealthController(health healthcheck.Handler,
+	kubeClient kubernetes.Interface,
+	agonesClient versioned.Interface,
+	kubeInformerFactory informers.SharedInformerFactory,
 	agonesInformerFactory externalversions.SharedInformerFactory) *HealthController {
 
 	podInformer := kubeInformerFactory.Core().V1().Pods().Informer()
+	gameserverInformer := agonesInformerFactory.Agones().V1().GameServers()
 	hc := &HealthController{
 		podSynced:        podInformer.HasSynced,
 		podLister:        kubeInformerFactory.Core().V1().Pods().Lister(),
-		gameServerGetter: agonesClient.StableV1alpha1(),
-		gameServerLister: agonesInformerFactory.Stable().V1alpha1().GameServers().Lister(),
+		gameServerSynced: gameserverInformer.Informer().HasSynced,
+		gameServerGetter: agonesClient.AgonesV1(),
+		gameServerLister: gameserverInformer.Lister(),
 	}
 
 	hc.baseLogger = runtime.NewLoggerWithType(hc)
-	hc.workerqueue = workerqueue.NewWorkerQueue(hc.syncGameServer, hc.baseLogger, logfields.GameServerKey, stable.GroupName+".HealthController")
+	hc.workerqueue = workerqueue.NewWorkerQueue(hc.syncGameServer, hc.baseLogger, logfields.GameServerKey, agones.GroupName+".HealthController")
+	health.AddLivenessCheck("gameserver-health-workerqueue", healthcheck.Check(hc.workerqueue.Healthy))
 
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(hc.baseLogger.Infof)
@@ -96,7 +104,7 @@ func NewHealthController(kubeClient kubernetes.Interface, agonesClient versioned
 // isUnhealthy returns if the Pod event is going
 // to cause the GameServer to become Unhealthy
 func (hc *HealthController) isUnhealthy(pod *corev1.Pod) bool {
-	return hc.unschedulableWithNoFreePorts(pod) || hc.failedContainer(pod)
+	return hc.evictedPod(pod) || hc.unschedulableWithNoFreePorts(pod) || hc.failedContainer(pod)
 }
 
 // unschedulableWithNoFreePorts checks if the reason the Pod couldn't be scheduled
@@ -112,13 +120,20 @@ func (hc *HealthController) unschedulableWithNoFreePorts(pod *corev1.Pod) bool {
 	return false
 }
 
+// evictedPod checks if the Pod was Evicted
+// could be caused by reaching limit on Ephemeral storage
+func (hc *HealthController) evictedPod(pod *corev1.Pod) bool {
+	return pod.Status.Reason == "Evicted"
+}
+
 // failedContainer checks each container, and determines if there was a failed
 // container
 func (hc *HealthController) failedContainer(pod *corev1.Pod) bool {
-	container := pod.Annotations[v1alpha1.GameServerContainerAnnotation]
+	container := pod.Annotations[agonesv1.GameServerContainerAnnotation]
 	for _, cs := range pod.Status.ContainerStatuses {
-		if cs.Name == container && cs.State.Terminated != nil {
-			return true
+		if cs.Name == container {
+			// sometimes on a restart, the cs.State can be running and the last state will be merged
+			return cs.State.Terminated != nil || cs.LastTerminationState.Terminated != nil
 		}
 	}
 	return false
@@ -126,15 +141,22 @@ func (hc *HealthController) failedContainer(pod *corev1.Pod) bool {
 
 // Run processes the rate limited queue.
 // Will block until stop is closed
-func (hc *HealthController) Run(stop <-chan struct{}) {
+func (hc *HealthController) Run(stop <-chan struct{}) error {
+	hc.baseLogger.Info("Wait for cache sync")
+	if !cache.WaitForCacheSync(stop, hc.gameServerSynced, hc.podSynced) {
+		return errors.New("failed to wait for caches to sync")
+	}
+
 	hc.workerqueue.Run(1, stop)
+
+	return nil
 }
 
 func (hc *HealthController) loggerForGameServerKey(key string) *logrus.Entry {
 	return logfields.AugmentLogEntry(hc.baseLogger, logfields.GameServerKey, key)
 }
 
-func (hc *HealthController) loggerForGameServer(gs *v1alpha1.GameServer) *logrus.Entry {
+func (hc *HealthController) loggerForGameServer(gs *agonesv1.GameServer) *logrus.Entry {
 	gsName := "NilGameServer"
 	if gs != nil {
 		gsName = gs.Namespace + "/" + gs.Name
@@ -164,13 +186,17 @@ func (hc *HealthController) syncGameServer(key string) error {
 	}
 
 	// at this point we don't care, we're already Unhealthy / deleting
-	if gs.IsBeingDeleted() || gs.Status.State == v1alpha1.GameServerStateUnhealthy {
+	if gs.IsBeingDeleted() || gs.Status.State == agonesv1.GameServerStateUnhealthy {
 		return nil
+	}
+
+	if skip, err := hc.skipUnhealthy(gs); err != nil || skip {
+		return err
 	}
 
 	hc.loggerForGameServer(gs).Info("Issue with GameServer pod, marking as GameServerStateUnhealthy")
 	gsCopy := gs.DeepCopy()
-	gsCopy.Status.State = v1alpha1.GameServerStateUnhealthy
+	gsCopy.Status.State = agonesv1.GameServerStateUnhealthy
 
 	if _, err := hc.gameServerGetter.GameServers(gs.ObjectMeta.Namespace).Update(gsCopy); err != nil {
 		return errors.Wrapf(err, "error updating GameServer %s to unhealthy", gs.ObjectMeta.Name)
@@ -179,4 +205,48 @@ func (hc *HealthController) syncGameServer(key string) error {
 	hc.recorder.Event(gs, corev1.EventTypeWarning, string(gsCopy.Status.State), "Issue with Gameserver pod")
 
 	return nil
+}
+
+// skipUnhealthy determines if it's appropriate to not move to Unhealthy when a Pod's
+// gameserver container has crashed, or let it restart as per usual K8s operations.
+// It does this by checking a combination of the current GameServer state and annotation data that stores
+// which container instance was live if the GameServer has been marked as Ready.
+// The logic is as follows:
+//   - If the GameServer is not yet Ready, allow to restart (return true)
+//   - If the GameServer is in a state past Ready, move to Unhealthy
+func (hc *HealthController) skipUnhealthy(gs *agonesv1.GameServer) (bool, error) {
+	pod, err := hc.podLister.Pods(gs.ObjectMeta.Namespace).Get(gs.ObjectMeta.Name)
+	if err != nil {
+		// Pod doesn't exist, so the GameServer is definitely not healthy
+		if k8serrors.IsNotFound(err) {
+			return false, nil
+		}
+		// if it's something else, go back into the queue
+		return false, errors.Wrapf(err, "error retrieving Pod %s for GameServer to check status", gs.ObjectMeta.Name)
+	}
+	if !metav1.IsControlledBy(pod, gs) {
+		// This is not the Pod we are looking for 🤖
+		return false, nil
+	}
+	if gs.IsBeforeReady() {
+		return hc.failedContainer(pod), nil
+	}
+
+	// finally, we need to check if there a failed container happened after the gameserver was ready or before.
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name == gs.Spec.Container {
+			if cs.State.Terminated != nil {
+				return false, nil
+			}
+			if cs.LastTerminationState.Terminated != nil {
+				// if the current container is running, and is the ready container, then we know this is some
+				// other pod update, and we previously had a restart before we got to being Ready, and therefore
+				// shouldn't move to Unhealthy.
+				return cs.ContainerID == gs.Annotations[agonesv1.GameServerReadyContainerIDAnnotation], nil
+			}
+			break
+		}
+	}
+
+	return false, nil
 }

@@ -34,6 +34,8 @@ Table of Contents
         * [make build-images](#make-build-images)
         * [make build-sdks](#make-build-sdks)
         * [make build-sdk-cpp](#make-build-sdk-cpp)
+        * [make run-sdk-conformance-tests](#make-run-sdk-conformance-tests)
+        * [make clean-sdk-conformance-tests](#make-clean-sdk-conformance-tests)
         * [make test](#make-test)
         * [make push](#make-push)
         * [make install](#make-install)
@@ -51,7 +53,7 @@ Table of Contents
         * [make build-agones-sdk-image](#make-build-agones-sdk-image)
         * [make gen-install](#make-gen-install)
         * [make gen-crd-client](#make-gen-crd-client)
-        * [make gen-gameservers-sdk-grpc](#make-gen-gameservers-sdk-grpc)
+        * [make gen-sdk-grpc](#make-gen-sdk-grpc)
      * [Build Image Targets](#build-image-targets)
         * [make clean-config](#make-clean-config)
         * [make clean-build-image](#make-clean-build-image)
@@ -69,7 +71,7 @@ Table of Contents
         * [make minikube-setup-grafana](#make-minikube-setup-grafana)
         * [make minikube-prometheus-portforward](#make-minikube-prometheus-portforward)
         * [make minikube-grafana-portforward](#make-minikube-grafana-portforward)
-     * [make minikube-test-e2e](#make-minikube-test-e2e)
+        * [make minikube-test-e2e](#make-minikube-test-e2e)
         * [make minikube-shell](#make-minikube-shell)
         * [make minikube-transfer-image](#make-minikube-transfer-image)
         * [make minikube-controller-portforward](#make-minikube-controller-portforward)
@@ -81,7 +83,7 @@ Table of Contents
         * [make kind-setup-grafana](#make-kind-setup-grafana)
         * [make kind-prometheus-portforward](#make-kind-prometheus-portforward)
         * [make kind-grafana-portforward](#make-kind-grafana-portforward)
-     * [make kind-test-e2e](#make-kind-test-e2e)
+        * [make kind-test-e2e](#make-kind-test-e2e)
         * [make kind-shell](#make-kind-shell)
         * [make kind-controller-portforward](#make-kind-controller-portforward)
      * [Custom Environment](#custom-environment)
@@ -200,7 +202,6 @@ See the table below for available customizations :
 |---------------------------------------|-------------------------------------------------------------------------------|---------------|
 | `GCP_CLUSTER_NAME`                    | The name of the cluster                                                       | `test-cluster`  |
 | `GCP_CLUSTER_ZONE`                    | The name of the Google Compute Engine zone in which the cluster will resides. |  `us-west1-c`   |
-| `GCP_CLUSTER_LEGACYABAC`              | Enables or disables the [ABAC](https://cloud.google.com/kubernetes-engine/docs/reference/rest/v1/projects.zones.clusters#LegacyAbac) authorization mechanism on a cluster.            | `false`         |
 | `GCP_CLUSTER_NODEPOOL_INITIALNODECOUNT`| The number of nodes to create in this cluster.                                |  `3`            |
 | `GCP_CLUSTER_NODEPOOL_MACHINETYPE`    | The name of a Google Compute Engine machine type.                             | `n1-standard-4` |
 
@@ -240,7 +241,7 @@ created at the beginning of this section. (if you want to see the resulting inst
 
 Finally to run end-to-end tests against your development version previously installed in your test cluster run `make test-e2e`, this will validate the whole application flow (from start to finish). If you're curious about how they work head to [tests/e2e](../test/e2e/)
 
-When your are finished, you can run `make clean-gcloud-e2e-test-cluster` to tear down your cluster.
+When your are finished, you can run `make clean-gcloud-test-cluster` to tear down your cluster.
 
 ### Running a Test Minikube cluster
 This will setup a [Minikube](https://github.com/kubernetes/minikube) cluster, running on an `agones` profile, 
@@ -298,7 +299,7 @@ Running end-to-end tests on minikube is done via the `make minikube-test-e2e` ta
 Because Kind runs on a docker on the host, some of the standard build and development Make targets
 need to be replaced by kind specific targets.
 
-If you have [go](https://golang.org/) and [docker](https://www.docker.com/) installed `go get sigs.k8s.io/kind` is all you need !
+First, [install Kind](https://github.com/kubernetes-sigs/kind#installation-and-usage).
 
 Next we will create the Agones Kind cluster. Run `make kind-test-cluster` to create the `agones` Kubernetes cluster.
 
@@ -416,14 +417,40 @@ Build all the sdks required for Agones
 #### `make build-sdk-cpp`
 Build the cpp sdk static and dynamic libraries (linux libraries only)
 
+#### `make run-sdk-conformance-local`
+Run Agones sidecar which would wait for all requests from the SDK client.
+Note that annotation should contain UID and label should contain CreationTimestamp values to pass the test.
+
+#### `make run-sdk-conformance-no-build`
+Only run a conformance test for a specific Agones SDK.
+
+#### `make run-sdk-conformance-test`
+Build, run and clean conformance test for a specific Agones SDK.
+
+#### `make run-sdk-conformance-tests`
+Run SDK conformance test.
+Run SDK server (sidecar) in test mode (which would record all GRPC requests) versus all SDK test clients which should generate those requests. All methods are verified.
+
+#### `make clean-sdk-conformance-tests`
+Clean leftover binary and package files after running SDK conformance tests.
+
 #### `make test`
 Run the linter and tests
+
+#### `make build-examples`
+Run `make build` for all `examples` subdirectories
 
 #### `make site-server`
 Generate `https://agones.dev` website locally and host on `http://localhost:1313`
 
+#### `make hugo-test`
+Check the links in a website
+
 #### `make site-test`
-Check the links in website
+Check the links in a website, includes `test-gen-api-docs` target
+
+#### `make site-images`
+Create all the site images from dot and puml diagrams in /site/static/diagrams
 
 #### `make gen-api-docs`
 Generate Agones CRD reference documentation [Agones CRD API reference](../site/content/en/docs/Reference/agones_crd_api_reference.html). Set `feature` shortcode with proper version automatically
@@ -454,7 +481,7 @@ Install Prometheus server using [stable/prometheus](https://github.com/helm/char
 
 By default all exporters and alertmanager is disabled.
 
-You can use this to collect Agones [Metrics](../docs/metrics.md).
+You can use this to collect Agones [Metrics](../site/content/en/docs/Guides/metrics.md).
 
 See [`make minikube-setup-prometheus`](#make-minikube-setup-prometheus) and [`make kind-setup-prometheus`](#make-kind-setup-prometheus) to run the installation on Minikube or Kind.
 
@@ -514,7 +541,7 @@ Generate the `/install/yaml/install.yaml` from the Helm template
 #### `make gen-crd-client`
 Generate the Custom Resource Definition client(s)
 
-#### `make gen-gameservers-sdk-grpc`
+#### `make gen-sdk-grpc`
 Generate the SDK gRPC server and client code
 
 ### Build Image Targets
@@ -621,7 +648,7 @@ port forwarding to the prometheus deployment.
 The minikube version of [`make grafana-portforward`](#make-grafana-portforward) to setup
 port forwarding to the grafana deployment.  
 
-### `make minikube-test-e2e`
+#### `make minikube-test-e2e`
 Runs end-to-end tests on the previously installed version of Agones.
 These tests validate Agones flow from start to finish.
 
@@ -678,7 +705,7 @@ The minikube version of [`make grafana-portforward`](#make-grafana-portforward) 
 port forwarding to the grafana deployment.  
 
 
-### `make kind-test-e2e`
+#### `make kind-test-e2e`
 Runs end-to-end tests on the previously installed version of Agones.
 These tests validate Agones flow from start to finish.
 
@@ -700,7 +727,7 @@ Cleans up your custom cluster by reseting Helm.
 
 ## Dependencies
 
-This project uses the [go modules](https://github.com/golang/go/wiki/Modules) as its manager. You can see the list of dependencies [here](https://github.com/GoogleCloudPlatform/agones/blob/master/go.mod).
+This project uses the [go modules](https://github.com/golang/go/wiki/Modules) as its manager. You can see the list of dependencies [here](https://github.com/googleforgames/agones/blob/master/go.mod).
 
 #### Vendoring
 
@@ -721,7 +748,7 @@ Here is an example for getting third_party from grpc-ecosystem/grpc-gateway v1.5
 
 Note the version in the pathname. Go may eliminate the need to do this in future versions.
 
-We also use vendor to hold code patches while waiting for the project to release the fixes in their own code. An example is in [k8s.io/apimachinery](https://github.com/GoogleCloudPlatform/agones/issues/414) where a fix will be released later this year, but we updated our own vendored version in order to fix the issue sooner.
+We also use vendor to hold code patches while waiting for the project to release the fixes in their own code. An example is in [k8s.io/apimachinery](https://github.com/googleforgames/agones/issues/414) where a fix will be released later this year, but we updated our own vendored version in order to fix the issue sooner.
 
 
 ## Troubleshooting
@@ -753,7 +780,7 @@ Run `make uninstall` then run `make install` again.
 Run `make build-images GO_BUILD_TAGS=profile` and this will build images with [pprof](https://golang.org/pkg/net/http/pprof/)
 enabled in the controller, which you can then push and install on your cluster.
 
-To get the pprof ui working, run `make controller-portforward` (or `minikube-controller-portforward` if you are on minikube),
+To get the pprof ui working, run `make controller-portforward PORT=6060` (or `minikube-controller-portforward PORT=6060` if you are on minikube),
 which will setup the port forwarding to the pprof http endpoint.
 
 Run `make pprof-web`, which will start the web interface. It may take a few minutes to start up, but it can be opened on

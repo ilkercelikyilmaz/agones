@@ -32,9 +32,16 @@ type GameServerAllocationPolicySpec struct {
 
 // ClusterConnectionInfo defines the connection information for a cluster
 type ClusterConnectionInfo struct {
-	ClusterName        string `json:"clusterName"`
-	AllocationEndpoint string `json:"allocationEndpoint"`
-	SecretName         string `json:"secretName"`
+	// Optional: the name of the targeted cluster
+	ClusterName string `json:"clusterName"`
+	// The endpoints for the allocator service in the targeted cluster.
+	// If the AllocationEndpoints is not set, the allocation happens on local cluster.
+	// If there are multiple endpoints any of the endpoints that can handle allocation request should suffice
+	AllocationEndpoints []string `json:"allocationEndpoints,omitempty"`
+	// The name of the secret that contains TLS client certificates to connect the allocator server in the targeted cluster
+	SecretName string `json:"secretName"`
+	// The cluster namespace from which to allocate gameservers
+	Namespace string `json:"namespace"`
 }
 
 // +genclient

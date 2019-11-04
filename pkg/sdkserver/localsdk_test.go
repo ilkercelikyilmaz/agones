@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"agones.dev/agones/pkg/apis/stable/v1alpha1"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	"agones.dev/agones/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -63,11 +63,27 @@ func TestLocal(t *testing.T) {
 	assert.Equal(t, defaultGs, gs)
 }
 
+func TestLocalSDKWithTestMode(t *testing.T) {
+	a := []string{"ready", "allocate", "setlabel", "setannotation", "gameserver", "health", "shutdown", "watch"}
+	b := []string{"ready", "health", "ready", "watch", "allocate", "gameserver", "setlabel", "setannotation", "health", "health", "shutdown"}
+	assert.True(t, EqualSets(a, a))
+	assert.True(t, EqualSets(a, b))
+	assert.True(t, EqualSets(b, a))
+	assert.True(t, EqualSets(b, b))
+	a[0] = "rady"
+	assert.False(t, EqualSets(a, b))
+	assert.False(t, EqualSets(b, a))
+	a[0] = "ready"
+	b[1] = "halth"
+	assert.False(t, EqualSets(a, b))
+	assert.False(t, EqualSets(b, a))
+}
+
 func TestLocalSDKWithGameServer(t *testing.T) {
 	ctx := context.Background()
 	e := &sdk.Empty{}
 
-	fixture := &v1alpha1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "stuff"}}
+	fixture := &agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "stuff"}}
 	path, err := gsToTmpFile(fixture.DeepCopy())
 	assert.Nil(t, err)
 
@@ -85,16 +101,16 @@ func TestLocalSDKServerSetLabel(t *testing.T) {
 	t.Parallel()
 
 	fixtures := map[string]struct {
-		gs *v1alpha1.GameServer
+		gs *agonesv1.GameServer
 	}{
 		"default": {
 			gs: nil,
 		},
 		"no labels": {
-			gs: &v1alpha1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "empty"}},
+			gs: &agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "empty"}},
 		},
 		"empty": {
-			gs: &v1alpha1.GameServer{},
+			gs: &agonesv1.GameServer{},
 		},
 	}
 
@@ -155,16 +171,16 @@ func TestLocalSDKServerSetAnnotation(t *testing.T) {
 	t.Parallel()
 
 	fixtures := map[string]struct {
-		gs *v1alpha1.GameServer
+		gs *agonesv1.GameServer
 	}{
 		"default": {
 			gs: nil,
 		},
 		"no annotation": {
-			gs: &v1alpha1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "empty"}},
+			gs: &agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "empty"}},
 		},
 		"empty": {
-			gs: &v1alpha1.GameServer{},
+			gs: &agonesv1.GameServer{},
 		},
 	}
 
@@ -224,7 +240,7 @@ func TestLocalSDKServerSetAnnotation(t *testing.T) {
 func TestLocalSDKServerWatchGameServer(t *testing.T) {
 	t.Parallel()
 
-	fixture := &v1alpha1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "stuff"}}
+	fixture := &agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "stuff"}}
 	path, err := gsToTmpFile(fixture)
 	assert.Nil(t, err)
 
@@ -259,7 +275,7 @@ func TestLocalSDKServerWatchGameServer(t *testing.T) {
 	}
 }
 
-func gsToTmpFile(gs *v1alpha1.GameServer) (string, error) {
+func gsToTmpFile(gs *agonesv1.GameServer) (string, error) {
 	file, err := ioutil.TempFile(os.TempDir(), "gameserver-")
 	if err != nil {
 		return file.Name(), err
@@ -267,4 +283,43 @@ func gsToTmpFile(gs *v1alpha1.GameServer) (string, error) {
 
 	err = json.NewEncoder(file).Encode(gs)
 	return file.Name(), err
+}
+
+// TestLocalSDKServerStateUpdates verify that SDK functions changes the state of the
+// GameServer object
+func TestLocalSDKServerStateUpdates(t *testing.T) {
+	t.Parallel()
+	l, err := NewLocalSDKServer("")
+	assert.Nil(t, err)
+
+	ctx := context.Background()
+	e := &sdk.Empty{}
+	_, err = l.Ready(ctx, e)
+	assert.Nil(t, err)
+
+	gs, err := l.GetGameServer(ctx, e)
+	assert.Nil(t, err)
+	assert.Equal(t, gs.Status.State, string(agonesv1.GameServerStateReady))
+
+	seconds := &sdk.Duration{Seconds: 2}
+	_, err = l.Reserve(ctx, seconds)
+	assert.Nil(t, err)
+
+	gs, err = l.GetGameServer(ctx, e)
+	assert.Nil(t, err)
+	assert.Equal(t, gs.Status.State, string(agonesv1.GameServerStateReserved))
+
+	_, err = l.Allocate(ctx, e)
+	assert.Nil(t, err)
+
+	gs, err = l.GetGameServer(ctx, e)
+	assert.Nil(t, err)
+	assert.Equal(t, gs.Status.State, string(agonesv1.GameServerStateAllocated))
+
+	_, err = l.Shutdown(ctx, e)
+	assert.Nil(t, err)
+
+	gs, err = l.GetGameServer(ctx, e)
+	assert.Nil(t, err)
+	assert.Equal(t, gs.Status.State, string(agonesv1.GameServerStateShutdown))
 }

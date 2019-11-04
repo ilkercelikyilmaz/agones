@@ -45,6 +45,10 @@ func TestSDK(t *testing.T) {
 	assert.True(t, sm.ready)
 	assert.False(t, sm.shutdown)
 
+	err = s.Reserve(12 * time.Second)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 12, sm.reserved.Seconds)
+
 	err = s.Health()
 	assert.Nil(t, err)
 	assert.True(t, sm.hm.healthy)
@@ -131,6 +135,7 @@ type sdkMock struct {
 	ready       bool
 	shutdown    bool
 	allocated   bool
+	reserved    *sdk.Duration
 	hm          *healthMock
 	wm          *watchMock
 	labels      map[string]string
@@ -172,6 +177,11 @@ func (m *sdkMock) Shutdown(ctx context.Context, e *sdk.Empty, opts ...grpc.CallO
 
 func (m *sdkMock) Health(ctx context.Context, opts ...grpc.CallOption) (sdk.SDK_HealthClient, error) {
 	return m.hm, nil
+}
+
+func (m *sdkMock) Reserve(ctx context.Context, in *sdk.Duration, opts ...grpc.CallOption) (*sdk.Empty, error) {
+	m.reserved = in
+	return &sdk.Empty{}, nil
 }
 
 type healthMock struct {

@@ -167,6 +167,33 @@
         ]
       }
     },
+    "/reserve": {
+      "post": {
+        "summary": "Marks the GameServer as the Reserved state for Duration",
+        "operationId": "Reserve",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "$ref": "#/definitions/sdkEmpty"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/sdkDuration"
+            }
+          }
+        ],
+        "tags": [
+          "SDK"
+        ]
+      }
+    },
     "/shutdown": {
       "post": {
         "summary": "Call when the GameServer is shutting down",
@@ -285,19 +312,19 @@
     "SpecHealth": {
       "type": "object",
       "properties": {
-        "Disabled": {
+        "disabled": {
           "type": "boolean",
           "format": "boolean"
         },
-        "PeriodSeconds": {
+        "period_seconds": {
           "type": "integer",
           "format": "int32"
         },
-        "FailureThreshold": {
+        "failure_threshold": {
           "type": "integer",
           "format": "int32"
         },
-        "InitialDelaySeconds": {
+        "initial_delay_seconds": {
           "type": "integer",
           "format": "int32"
         }
@@ -314,6 +341,16 @@
           "format": "int32"
         }
       }
+    },
+    "sdkDuration": {
+      "type": "object",
+      "properties": {
+        "seconds": {
+          "type": "string",
+          "format": "int64"
+        }
+      },
+      "title": "time duration, in seconds"
     },
     "sdkEmpty": {
       "type": "object",

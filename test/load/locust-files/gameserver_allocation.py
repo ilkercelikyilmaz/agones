@@ -22,9 +22,9 @@ import atexit
 FLEET_SIZE = 100
 FLEET_NAME = "scale-test-fleet"
 FLEET_RESOURCE_PATH = (
-    "/apis/stable.agones.dev/v1alpha1/namespaces/default/fleets")
+    "/apis/agones.dev/v1/namespaces/default/fleets")
 ALLOCATION_RESOURCE_PATH = (
-    "/apis/allocation.agones.dev/v1alpha1/namespaces/default"
+    "/apis/allocation.agones.dev/v1/namespaces/default"
     "/gameserverallocations")
 
 
@@ -38,7 +38,7 @@ class UserBehavior(TaskSet):
         ready_replicas = response_json['status']['readyReplicas']
         # Allocate game servers.
         payload = {
-            "apiVersion": "allocation.agones.dev/v1alpha1",
+            "apiVersion": "allocation.agones.dev/v1",
             "kind": "GameServerAllocation",
             "metadata": {
                 "generateName": "gs-allocation-",
@@ -47,7 +47,7 @@ class UserBehavior(TaskSet):
             "spec": {
                 "required": {
                     "matchLabels": {
-                        "stable.agones.dev/fleet": FLEET_NAME
+                        "agones.dev/fleet": FLEET_NAME
                     }
                 }
             }
@@ -100,7 +100,7 @@ class AgonesUser(HttpLocust):
         # Create a Fleet and wait for it to scale up.
         print "Creating Fleet: " + fleet_name
         payload = {
-            "apiVersion": "stable.agones.dev/v1alpha1",
+            "apiVersion": "agones.dev/v1",
             "kind": "Fleet",
             "metadata": {
                 "name": str(fleet_name),
@@ -128,7 +128,17 @@ class AgonesUser(HttpLocust):
                                         "name": "simple-udp",
                                         "image": (
                                             "gcr.io/agones-images"
-                                            "/udp-server:0.5")
+                                            "/udp-server:0.9"),
+                                        "resources": {
+                                            "limits": {
+                                                "cpu": "20m",
+                                                "memory": "64Mi"
+                                            },
+                                            "requests": {
+                                                "cpu": "20m",
+                                                "memory": "64Mi"
+                                            }
+                                        }
                                     }
                                 ]
                             }

@@ -6,29 +6,49 @@ description: "A `Fleet` is a set of warm GameServers that are available to be al
 weight: 20
 ---
 
-To allocate a `GameServer` from a `Fleet`, use a `FleetAllocation`.
+To allocate a `GameServer` from a `Fleet`, use a `GameServerAllocation`.
 
 Like any other Kubernetes resource you describe a `Fleet`'s desired state via a specification written in YAML or JSON to the Kubernetes API. The Agones controller will then change the actual state to the desired state.
 
 A full `Fleet` specification is available below and in the {{< ghlink href="examples/fleet.yaml" >}}example folder{{< /ghlink >}} for reference :
 
 ```yaml
-apiVersion: "stable.agones.dev/v1alpha1"
+apiVersion: "agones.dev/v1"
 kind: Fleet
+# Fleet Metadata
+# https://v1-12.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.12/#objectmeta-v1-meta
 metadata:
   name: fleet-example
 spec:
+  # the number of GameServers to keep Ready or Allocated in this Fleet
   replicas: 2
+  # defines how GameServers are organised across the cluster.
+  # Options include:
+  # "Packed" (default) is aimed at dynamic Kubernetes clusters, such as cloud providers, wherein we want to bin pack
+  # resources
+  # "Distributed" is aimed at static Kubernetes clusters, wherein we want to distribute resources across the entire
+  # cluster
   scheduling: Packed
+  # a GameServer template - see:
+  # https://agones.dev/site/docs/reference/gameserver/ for all the options
   strategy:
+    # The replacement strategy for when the GameServer template is changed. Default option is "RollingUpdate",
+    # "RollingUpdate" will increment by maxSurge value on each iteration, while decrementing by maxUnavailable on each
+    # iteration, until all GameServers have been switched from one version to another.
+    # "Recreate" terminates all non-allocated GameServers, and starts up a new set with the new details to replace them.
     type: RollingUpdate
+    # Only relevant when `type: RollingUpdate`
     rollingUpdate:
+      # the amount to increment the new GameServers by. Defaults to 25%
       maxSurge: 25%
-      maxUnavailable: 25%  
+      # the amount to decrements GameServers by. Defaults to 25%
+      maxUnavailable: 25%
   template:
+    # GameServer metadata
     metadata:
       labels:
         foo: bar
+    # GameServer specification
     spec:
       ports:
       - name: default
@@ -37,17 +57,23 @@ spec:
       health:
         initialDelaySeconds: 30
         periodSeconds: 60
+      # Parameters for game server sidecar
+      sdkServer:
+        logLevel: Info
+        grpcPort: 9357
+        httpPort: 9358
+      # The GameServer's Pod template
       template:
         spec:
           containers:
-          - name: example-server
-            image: gcr.io/agones/test-server:0.1
+          - name: simple-udp
+            image: gcr.io/agones-images/udp-server:0.17
 ```
 
 Since Agones defines a new 
 [Custom Resources Definition (CRD)](https://kubernetes.io/docs/concepts/api-extension/custom-resources/) 
-we can define a new resource using the kind `Fleet` with the custom group `stable.agones.dev` and API 
-version `v1alpha1`.
+we can define a new resource using the kind `Fleet` with the custom group `agones.dev` and API 
+version `v1`.
 
 You can use the metadata field to target a specific 
 [namespaces](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/) but also 
@@ -75,120 +101,21 @@ The `spec` field is the actual `Fleet` specification and it is composed as follo
 - `template` a full `GameServer` configuration template.
    See the [GameServer]({{< relref "gameserver.md" >}}) reference for all available fields.
 
-## GameServer Allocation Specification
-
-> GameServerAllocation will eventually replace FleetAllocation, but is currently experimental, and likely to change in upcoming releases.
-  However, we welcome you to test it out in its current format and provide feedback.
-
-A `GameServerAllocation` is used to atomically allocate a GameServer out of a set of GameServers. 
-This could be a single Fleet, multiple Fleets, or a self managed group of GameServers.
-
-A full `GameServerAllocation` specification is available below and in the 
-{{< ghlink href="/examples/gameserverallocation.yaml" >}}example folder{{< /ghlink >}} for reference:
-
-
-```yaml
-apiVersion: "stable.agones.dev/v1alpha1"
-kind: GameServerAllocation
-metadata:
-  generateName: simple-udp-
-spec:
-  required:
-    matchLabels:
-      game: my-game
-    matchExpressions:
-      - {key: tier, operator: In, values: [cache]}
-  # ordered list of preferred allocations 
-  # This also support `matchExpressions`
-  preferred:
-    - matchLabels:
-        stable.agones.dev/fleet: green-fleet
-    - matchLabels:
-        stable.agones.dev/fleet: blue-fleet
-  # defines how GameServers are organised across the cluster.
-  # Options include:
-  # "Packed" (default) is aimed at dynamic Kubernetes clusters, such as cloud providers, wherein we want to bin pack
-  # resources
-  # "Distributed" is aimed at static Kubernetes clusters, wherein we want to distribute resources across the entire
-  # cluster
-  scheduling: Packed
-  # Optional custom metadata that is added to the game server at allocation
-  # You can use this to tell the server necessary session data
-  metadata:
-    labels:
-      mode: deathmatch
-    annotations:
-      map:  garden22
-```
-
-We recommend using `metadata > generateName`, to declare to Kubernetes that a unique
-name for the `GameServerAllocation` is generated when the `GameServerAllocation` is created.
-
-The `spec` field is the actual `GameServerAllocation` specification and it is composed as follow:
-
-- `required` is a [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/) 
-   (matchLabels and/or matchExpressions) from which to choose GameServers from.
-   GameServers still have the hard requirement to be `Ready` to be allocated from
-- `preferred` is an order list of [label selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/)
-   out of the `required` set.
-   If the first selector is not matched, the selection attempts the second selector, and so on.
-   This is useful for things like smoke testing of new game servers. 
-- `scheduling` defines how GameServers are organised across the cluster, in this case specifically when allocating
-  `GameServers` for usage.
-   "Packed" (default) is aimed at dynamic Kubernetes clusters, such as cloud providers, wherein we want to bin pack
-   resources. "Distributed" is aimed at static Kubernetes clusters, wherein we want to distribute resources across the entire
-   cluster. See [Scheduling and Autoscaling]({{< ref "/docs/Advanced/scheduling-and-autoscaling.md" >}}) for more details.
- 
-- `metadata` is an optional list of custom labels and/or annotations that will be used to patch 
-  the game server's metadata in the moment of allocation. This can be used to tell the server necessary session data
-
-# Fleet Allocation Specification
-
-> Fleet Allocation is **deprecated** in version 0.10.0, and will be removed in the 0.12.0 release.
-  Migrate to using GameServer Allocation instead.
-
-A `FleetAllocation` is used to allocate a `GameServer` out of an existing `Fleet`
-
-A full `FleetAllocation` specification is available below and in the 
-{{< ghlink href="examples/fleetallocation.yaml" >}}example folder{{< /ghlink >}} for reference:
-
-```yaml
-apiVersion: "stable.agones.dev/v1alpha1"
-kind: FleetAllocation
-metadata:
-  generateName: fleet-allocation-example-
-spec:
-  fleetName: fleet-example
-  metadata:
-    labels:
-      mode: deathmatch
-    annotations:
-      map:  garden22
-```
-
-We recommend using `metadata > generateName`, to declare to Kubernetes that a unique
-name for the `FleetAllocation` is generated when the `FleetAllocation` is created.
-
-The `spec` field is the actual `FleetAllocation` specification and it is composed as follow:
-
-- `fleetName` is the name of an existing Fleet. If this doesn't exist, an error will be returned
-  when the `FleetAllocation` is created
-- `metadata` is an optional list of custom labels and/or annotations that will be used to patch 
-  the game server's metadata in the moment of allocation. This can be used to tell the server necessary session data
-
-# Fleet Scale Subresource Specification
+## Fleet Scale Subresource Specification
 
 Scale subresource is defined for a Fleet. Please refer to [Kubernetes docs](https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/#subresources).
 
 You can use the following command to scale the fleet with name simple-udp:
+
 ```bash
 $ kubectl scale fleet simple-udp --replicas=10
-fleet.stable.agones.dev/simple-udp scaled
+fleet.agones.dev/simple-udp scaled
 ```
 
 You can also use [Kubernetes API]({{< ref "/docs/Guides/access-api.md" >}}) to get or update the Replicas count:
+
 ```
-curl http://localhost:8001/apis/stable.agones.dev/v1alpha1/namespaces/default/fleets/simple-udp/scale
+curl http://localhost:8001/apis/agones.dev/v1/namespaces/default/fleets/simple-udp/scale
 ...
 {
   "kind": "Scale",
@@ -196,7 +123,7 @@ curl http://localhost:8001/apis/stable.agones.dev/v1alpha1/namespaces/default/fl
   "metadata": {
     "name": "simple-udp",
     "namespace": "default",
-    "selfLink": "/apis/stable.agones.dev/v1alpha1/namespaces/default/fleets/simple-udp/scale",
+    "selfLink": "/apis/agones.dev/v1/namespaces/default/fleets/simple-udp/scale",
     "uid": "4dfaa310-2566-11e9-afd1-42010a8a0058",
     "resourceVersion": "292652",
     "creationTimestamp": "2019-01-31T14:41:33Z"
@@ -209,4 +136,4 @@ curl http://localhost:8001/apis/stable.agones.dev/v1alpha1/namespaces/default/fl
   }
 ```
 
-Also exposing a Scale subresource would allow you to configure HorizontalPodAutoscaler and PodDisruptionBudget for a fleet in the future. Howeber these features have not been tested, and are not currently supported - but if you are looking for these features, please be sure to let us know in the [ticket](https://github.com/GoogleCloudPlatform/agones/issues/553). 
+Also exposing a Scale subresource would allow you to configure HorizontalPodAutoscaler and PodDisruptionBudget for a fleet in the future. However these features have not been tested, and are not currently supported - but if you are looking for these features, please be sure to let us know in the [ticket](https://github.com/googleforgames/agones/issues/553). 

@@ -35,7 +35,7 @@ import (
 
 var (
 	// Reference:
-	// https://github.com/GoogleCloudPlatform/agones/blob/master/vendor/k8s.io/apiextensions-apiserver/pkg/apiserver/apiserver.go
+	// https://github.com/googleforgames/agones/blob/master/vendor/k8s.io/apiextensions-apiserver/pkg/apiserver/apiserver.go
 	// These are public as they may be needed by CRDHandler implementations (usually for returning Status values)
 
 	// Scheme scheme for unversioned types - such as APIResourceList, and Status
@@ -117,7 +117,7 @@ func (as *APIServer) AddAPIResource(groupVersion string, resource metav1.APIReso
 		as.addSerializedHandler(pattern, list)
 		as.logger.WithField("groupversion", groupVersion).WithField("pattern", pattern).Info("Adding Discovery Handler")
 
-		// e.g.  /apis/stable.agones.dev/v1alpha1/namespaces/default/gameservers
+		// e.g.  /apis/agones.dev/v1/namespaces/default/gameservers
 		// CRD handler
 		pattern = fmt.Sprintf("/apis/%s/namespaces/", groupVersion)
 		as.mux.HandleFunc(pattern, https.ErrorHTTPHandler(as.logger, as.resourceHandler(groupVersion)))

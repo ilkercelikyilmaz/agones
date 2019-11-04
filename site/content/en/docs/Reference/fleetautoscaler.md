@@ -10,42 +10,63 @@ A full `FleetAutoscaler` specification is available below and in the
 {{< ghlink href="examples/fleetautoscaler.yaml" >}}example folder{{< /ghlink >}} for reference :
 
 ```yaml
-apiVersion: "stable.agones.dev/v1alpha1"
+apiVersion: "autoscaling.agones.dev/v1"
 kind: FleetAutoscaler
+# FleetAutoscaler Metadata
+# https://v1-12.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.12/#objectmeta-v1-meta
 metadata:
   name: fleet-autoscaler-example
 spec:
+  # The name of the fleet to attach to and control. Must be an existing Fleet in the same namespace
+  # as this FleetAutoscaler
   fleetName: fleet-example
+  # The autoscaling policy
   policy:
+    # type of the policy. for now, only Buffer is available
     type: Buffer
+    # parameters of the buffer policy
     buffer:
+      # Size of a buffer of "ready" game server instances
+      # The FleetAutoscaler will scale the fleet up and down trying to maintain this buffer, 
+      # as instances are being allocated or terminated
+      # it can be specified either in absolute (i.e. 5) or percentage format (i.e. 5%)
       bufferSize: 5
+      # minimum fleet size to be set by this FleetAutoscaler. 
+      # if not specified, the actual minimum fleet size will be bufferSize
       minReplicas: 10
+      # maximum fleet size that can be set by this FleetAutoscaler
+      # required
       maxReplicas: 20
 ```
 
 Or for Webhook FleetAutoscaler below and in {{< ghlink href="examples/webhookfleetautoscaler.yaml" >}}example folder{{< /ghlink >}}:
 
 ```yaml
-apiVersion: "stable.agones.dev/v1alpha1"
+apiVersion: "autoscaling.agones.dev/v1"
 kind: FleetAutoscaler
 metadata:
-  name: fleet-autoscaler-example
+  name: webhook-fleet-autoscaler
 spec:
-  fleetName: fleet-example
+  fleetName: simple-udp
   policy:
+    # type of the policy - this example is Webhook
     type: Webhook
+    # parameters for the webhook policy - this is a WebhookClientConfig, as per other K8s webhooks
     webhook:
-      name: "fleet-autoscaler-webhook"
-      namespace: "default"
-      path: "/scale"
-      caBundle: "<base64 encoded string>"
+      # use a service, or URL
+      service:
+        name: autoscaler-webhook-service
+        namespace: default
+        path: scale
+      # optional for URL defined webhooks
+      # url: ""
+      # caBundle:  optional, used for HTTPS webhook type
 ```
 
 Since Agones defines a new 
 [Custom Resources Definition (CRD)](https://kubernetes.io/docs/concepts/api-extension/custom-resources/) 
-we can define a new resource using the kind `FleetAutoscaler` with the custom group `stable.agones.dev` and API 
-version `v1alpha1`.
+we can define a new resource using the kind `FleetAutoscaler` with the custom group `autoscaling.agones.dev` 
+and API version `v1`
 
 The `spec` field is the actual `FleetAutoscaler` specification and it is composed as follows:
 
@@ -104,7 +125,7 @@ type FleetAutoscaleRequest struct {
 	// Namespace is the namespace associated with the request (if any).
 	Namespace string `json:"namespace"`
 	// The Fleet's status values
-	Status v1alpha1.FleetStatus `json:"status"`
+	Status v1.FleetStatus `json:"status"`
 }
 
 type FleetAutoscaleResponse struct {
@@ -123,6 +144,9 @@ type FleetStatus struct {
 	Replicas int32 `json:"replicas"`
 	// ReadyReplicas are the number of Ready GameServer replicas
 	ReadyReplicas int32 `json:"readyReplicas"`
+	// ReservedReplicas are the total number of Reserved GameServer replicas in this fleet.
+	// Reserved instances won't be deleted on scale down, but won't cause an autoscaler to scale up.
+	ReservedReplicas int32 `json:"reservedReplicas"`
 	// AllocatedReplicas are the number of Allocated GameServer replicas
 	AllocatedReplicas int32 `json:"allocatedReplicas"`
 }

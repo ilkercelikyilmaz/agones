@@ -1,17 +1,14 @@
 <img src="./docs/agones.png" alt="Agones logo" width="250px" height="250px" />
 
 [![GoDoc](https://godoc.org/agones.dev/agones?status.svg)](https://godoc.org/agones.dev/agones)
-[![Go Report Card](https://goreportcard.com/badge/github.com/GoogleCloudPlatform/agones)](https://goreportcard.com/report/github.com/GoogleCloudPlatform/agones)
-[![GitHub release](https://img.shields.io/github/release/GoogleCloudPlatform/agones.svg)](https://github.com/GoogleCloudPlatform/agones/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/googleforgames/agones)](https://goreportcard.com/report/github.com/googleforgames/agones)
+[![GitHub release](https://img.shields.io/github/release/googleforgames/agones.svg)](https://github.com/googleforgames/agones/releases)
 [![Follow on Twitter](https://img.shields.io/twitter/follow/agonesdev.svg?style=social&logo=twitter)](https://twitter.com/intent/follow?screen_name=agonesdev)
 
 Agones is a library for hosting, running and scaling [dedicated game servers](https://en.wikipedia.org/wiki/Game_server#Dedicated_server) on [Kubernetes](https://kubernetes.io).
 
 _Agones, is derived from the Greek word agōn which roughly translates to “contest”, “competition at games” and “gathering”.
 ([source](https://www.merriam-webster.com/dictionary/agones))_
-
-## Disclaimer
-This software is currently alpha, and subject to change. Not to be used in production systems.
 
 ## Why does this project exist?
 Agones replaces usual bespoke or proprietary cluster management and game server scaling solutions with a [Kubernetes](https://kubernetes.io/) cluster
@@ -34,7 +31,7 @@ Documentation can be found on the [Agones website](https://agones.dev/site/docs/
 
 ## Get involved
 
-- [Slack](https://join.slack.com/t/agones/shared_invite/enQtMzE5NTE0NzkyOTk1LWQ2ZmY1Mjc4ZDQ4NDJhOGYxYTY2NTY0NjUwNjliYzVhMWFjYjMxM2RlMjg3NGU0M2E0YTYzNDIxNDMyZGNjMjU)
+- [Slack](https://join.slack.com/t/agones/shared_invite/enQtMzE5NTE0NzkyOTk1LWU3ODAyZjdjMjNlYWIxZTAwODkxMGY3YWEyZjNjMjc4YWM1Zjk0OThlMGU2ZmUyMzRlMDljNDJiNmZlMGQ1M2U)
 - [Twitter](https://twitter.com/agonesdev)
 - [Mailing List](https://groups.google.com/forum/#!forum/agones-discuss)
 

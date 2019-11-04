@@ -54,6 +54,14 @@ type WorkerQueue struct {
 	running int
 }
 
+// FastRateLimiter returns a rate limiter without exponential back-off, with specified maximum per-item retry delay.
+func FastRateLimiter(maxDelay time.Duration) workqueue.RateLimiter {
+	const numFastRetries = 5
+	const fastDelay = 200 * time.Millisecond // first few retries up to 'numFastRetries' are fast
+
+	return workqueue.NewItemFastSlowRateLimiter(fastDelay, maxDelay, numFastRetries)
+}
+
 // NewWorkerQueue returns a new worker queue for a given name
 func NewWorkerQueue(handler Handler, logger *logrus.Entry, keyName logfields.ResourceType, queueName string) *WorkerQueue {
 	return NewWorkerQueueWithRateLimiter(handler, logger, keyName, queueName, workqueue.DefaultControllerRateLimiter())
@@ -97,6 +105,20 @@ func (wq *WorkerQueue) EnqueueImmediately(obj interface{}) {
 	}
 	wq.logger.WithField(wq.keyName, key).Info("Enqueuing immediately")
 	wq.queue.Add(key)
+}
+
+// EnqueueAfter delays an enqueuee operation by duration
+func (wq *WorkerQueue) EnqueueAfter(obj interface{}, duration time.Duration) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		err = errors.Wrap(err, "Error creating key for object")
+		runtime.HandleError(wq.logger.WithField("obj", obj), err)
+		return
+	}
+
+	wq.logger.WithField(wq.keyName, key).WithField("duration", duration).Info("Enqueueing after duration")
+	wq.queue.AddAfter(key, duration)
 }
 
 // runWorker is a long-running function that will continually call the

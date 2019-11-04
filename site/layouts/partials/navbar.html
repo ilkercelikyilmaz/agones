@@ -1,10 +1,10 @@
 {{ $cover := .HasShortcode "blocks/cover" }}
 <nav class="js-navbar-scroll navbar navbar-expand navbar-light {{ if not $cover }} nav-shadow {{ end }}flex-column flex-md-row td-navbar">
-	
+
 	<a id="agones-top" {{ if $cover }} style="display: none;" {{end}} class="navbar-brand" href="{{ .Site.Home.RelPermalink }}">
 		{{ with resources.Get "icons/logo.svg" }}{{ ( . | minify).Content | safeHTML }} {{ end }}<span class="text-uppercase font-weight-bold">{{ .Site.Title }}</span>
 	</a>
-	
+
 	<div class="td-navbar-nav-scroll ml-md-auto" id="main_navbar">
 		<ul class="navbar-nav mt-2 mt-lg-0">
 			{{ $p := . }}
@@ -18,7 +18,7 @@
 			</li>
 			{{ end }}
 			<li class="nav-item mr-4 mb-2 mb-lg-0">
-				<a class="nav-link" href="{{ .Site.Params.github_repo }}">Github</a>
+				<a class="nav-link" href="{{ .Site.Params.github_repo }}">GitHub</a>
 			</li>
 			<li class="nav-item dropdown d-none d-lg-block">
 				<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -27,8 +27,11 @@
 				<div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
 					<a class="dropdown-item" href="https://development.agones.dev">Development</a>
 					<a class="dropdown-item" href="https://agones.dev">{{ .Site.Params.release_version }}</a>
+					<a class="dropdown-item" href="https://1-0-0.agones.dev">1.0.0</a>
+					<a class="dropdown-item" href="https://0-12-0.agones.dev">0.12.0</a>
+					<a class="dropdown-item" href="https://0-11-0.agones.dev">0.11.0</a>
+					<a class="dropdown-item" href="https://0-10-0.agones.dev">0.10.0</a>
 					<a class="dropdown-item" href="https://0-9-0.agones.dev">0.9.0</a>
-					<a class="dropdown-item" href="https://0-8-0.agones.dev">0.8.0</a>
 				</div>
 			</li>
 			{{ if  (gt (len .Site.Home.Translations) 0) }}

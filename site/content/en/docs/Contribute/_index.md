@@ -38,7 +38,7 @@ version is incremented on the release:
 ### At the Page Level
 
 Use `publishDate` and `expiryDate` in [Hugo Front Matter](https://gohugo.io/content-management/front-matter/) to control
-when the page is displayed (or hidden). You can look at the [Release Calendar](https://github.com/GoogleCloudPlatform/agones/blob/master/docs/governance/release_process.md#release-calendar)
+when the page is displayed (or hidden). You can look at the [Release Calendar](https://github.com/googleforgames/agones/blob/master/docs/governance/release_process.md#release-calendar)
 to align it with the next release
 candidate release date - or whichever release is most relevant.  
 
@@ -63,6 +63,14 @@ or to hide a section from 0.8.0 onward:
 {{%/* /feature */%}}
 ```
 
-> Due to [this hugo bug](https://github.com/gohugoio/hugo/issues/4695) headers wrapped in this shortcode will
+
+{{< alert title="Warning" color="warning">}}
+ Due to [this hugo bug](https://github.com/gohugoio/hugo/issues/4695) headers wrapped in this shortcode will
   not be displayed in the Table of Contents. So we will need to actively remove the `feature` shortcode once
   the release versions have been passed for new content, for content that is affected.
+{{< /alert >}}
+
+## Regenerate Diagrams
+
+To regenerate the [PlantUML](http://plantuml.com/) or [Dot](https://www.graphviz.org/doc/info/lang.html) diagrams,
+delete the .png version of the file in question from `/site/static/diagrams/`, and run `make site-images`.

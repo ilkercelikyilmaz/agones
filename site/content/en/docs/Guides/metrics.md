@@ -7,7 +7,7 @@ weight: 50
 Agones controller exposes metrics via [OpenCensus](https://opencensus.io/). OpenCensus is a single distribution of libraries that collect metrics and distributed traces from your services, we only use it for metrics but it will allow us to support multiple exporters in the future.
 
 We choose to start with [Prometheus](https://prometheus.io/) as this is the most popular with Kubernetes but it is also compatible with Stackdriver.
-If you need another exporter, check the [list of supported](https://opencensus.io/exporters/supported-exporters/go/) exporters. It should be pretty straightforward to register a new one.(Github PR are more than welcomed)
+If you need another exporter, check the [list of supported](https://opencensus.io/exporters/supported-exporters/go/) exporters. It should be pretty straightforward to register a new one. (GitHub PRs are more than welcome.)
 
 We plan to support multiple exporters in the future via environement variables and helm flags.
 
@@ -31,7 +31,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-        stable.agones.dev/role: controller
+        agones.dev/role: controller
   endpoints:
   - port: web
 ```
@@ -40,7 +40,7 @@ Finally include that `ServiceMonitor` in your [Prometheus instance CRD](https://
 
 ### Stackdriver
 
-We support the [OpenCensus Stackdriver exporter](https://opencensus.io/exporters/supported-exporters/go/stackdriver/). 
+We support the [OpenCensus Stackdriver exporter](https://opencensus.io/exporters/supported-exporters/go/stackdriver/).
 In order to use it you should enable [Stackdriver Monitoring API](https://cloud.google.com/monitoring/api/enable-api) in Google Cloud Console.
 Follow the [Stackdriver Installation steps](#stackdriver-installation) to see your metrics on Stackdriver Monitoring website.
 
@@ -84,7 +84,7 @@ We provide a set of useful [Grafana](https://grafana.com/) dashboards to monitor
 
 - {{< ghlink href="/build/grafana/dashboard-goclient-workqueues.yaml" branch="master" >}}Agones Controller go-client workqueues{{< /ghlink >}} displays Agones Controller workqueue processing time and rates.
 
-- {{< ghlink href="/build/grafana/dashboard-apiserver-requests.yaml" branch="master" >}}Agones Controller API Server requests{{< /ghlink >}} displays your current API server request rate, errors rate and request latencies with optional CustomResourceDefinition filtering by Types: fleets, gameserversets, gameservers, gamserverallocations.
+- {{< ghlink href="/build/grafana/dashboard-apiserver-requests.yaml" branch="master" >}}Agones Controller API Server requests{{< /ghlink >}} displays your current API server request rate, errors rate and request latencies with optional CustomResourceDefinition filtering by Types: fleets, gameserversets, gameservers, gameserverallocations.
 
 Dashboard screenshots :
 
@@ -92,7 +92,9 @@ Dashboard screenshots :
 
 ![grafana dashboard controller](../../../images/grafana-dashboard-controller.png)
 
-> You can import our dashboards by copying the json content from {{< ghlink href="/build/grafana" branch="master" >}}each config map{{< /ghlink >}} into your own instance of Grafana (+ > Create > Import > Or paste json) or follow the [installation](#installation) guide.
+{{< alert title="Note" color="info">}}
+You can import our dashboards by copying the json content from {{< ghlink href="/build/grafana" branch="master" >}}each config map{{< /ghlink >}} into your own instance of Grafana (+ > Create > Import > Or paste json) or follow the [installation](#installation) guide.
+{{< /alert >}}
 
 ## Installation
 
@@ -114,20 +116,22 @@ helm upgrade --install --wait prom stable/prometheus --namespace metrics \
     -f ./build/prometheus.yaml
 ```
 
-> You can also run our {{< ghlink href="/build/Makefile" branch="master" branch="master" >}}Makefile{{< /ghlink >}} target `make setup-prometheus`
-or `make kind-setup-prometheus` and `make minikube-setup-prometheus` for {{< ghlink href="/build/README.md#running-a-test-kind-cluster" branch="master" >}}Kind{{< /ghlink >}}
-and {{< ghlink href="/build/README.md#running-a-test-minikube-cluster" branch="master" >}}Minikube{{< /ghlink >}}.
+{{% alert title="Note" color="info"%}}
+You can also run our {{< ghlink href="/build/Makefile" branch="master" branch="master" >}}Makefile{{< /ghlink >}} target `make setup-prometheus`
+or `make kind-setup-prometheus` and `make minikube-setup-prometheus` 
+for {{< ghlink href="/build/README.md#running-a-test-kind-cluster" branch="master" >}}Kind{{< /ghlink >}} and {{< ghlink href="/build/README.md#running-a-test-minikube-cluster" branch="master" >}}Minikube{{< /ghlink >}}.
+{{% /alert %}}
 
 For resiliency it is recommended to run Prometheus on a dedicated node which is separate from nodes where Game Servers
 are scheduled. If you use the above command, with our {{< ghlink href="/build/prometheus.yaml" branch="master" >}}prometheus.yaml{{< /ghlink >}} to set up Prometheus, it will schedule Prometheus pods on nodes
-tainted with `stable.agones.dev/agones-metrics=true:NoExecute` and labeled with `stable.agones.dev/agones-metrics=true` if available.
+tainted with `agones.dev/agones-metrics=true:NoExecute` and labeled with `agones.dev/agones-metrics=true` if available.
 
 As an example, to set up dedicated node pool for Prometheus on GKE, run the following command before installing Prometheus. Alternatively you can taint and label nodes manually.
 
 ```
 gcloud container node-pools create agones-metrics --cluster=... --zone=... \
-  --node-taints stable.agones.dev/agones-metrics=true:NoExecute \
-  --node-labels stable.agones.dev/agones-metrics=true \
+  --node-taints agones.dev/agones-metrics=true:NoExecute \
+  --node-labels agones.dev/agones-metrics=true \
   --num-nodes=1
 ```
 
@@ -143,15 +147,18 @@ Finally to access Prometheus metrics, rules and alerts explorer use
 kubectl port-forward deployments/prom-prometheus-server 9090 -n metrics
 ```
 
-> Again you can use our Makefile {{< ghlink href="/build/README.md#prometheus-portforward" branch="master" >}}`make prometheus-portforward`{{< /ghlink >}}.
-  (For {{< ghlink href="/build/README.md#running-a-test-kind-cluster" branch="master" >}}Kind{{< /ghlink >}} and 
-  {{< ghlink href="/build/README.md#running-a-test-minikube-cluster" branch="master" >}}Minikube{{< /ghlink >}} use their specific targets `make kind-prometheus-portforward` and `make minikube-prometheus-portforward`)
+{{< alert title="Note" color="info">}}
+ Again you can use our Makefile {{< ghlink href="/build/README.md#prometheus-portforward" branch="master" >}}`make prometheus-portforward`{{< /ghlink >}}.
+  (For {{< ghlink href="/build/README.md#running-a-test-kind-cluster" branch="master" >}}Kind{{< /ghlink >}} and {{< ghlink href="/build/README.md#running-a-test-minikube-cluster" branch="master" >}}Minikube{{< /ghlink >}} use their specific targets `make kind-prometheus-portforward` and `make minikube-prometheus-portforward`)
+{{< /alert >}}
 
 Now you can access the prometheus dashboard [http://localhost:9090](http://localhost:9090).
 
 On the landing page you can start exploring metrics by creating [queries](https://prometheus.io/docs/prometheus/latest/querying/basics/). You can also verify what [targets](http://localhost:9090/targets) Prometheus currently monitors (Header Status > Targets), you should see Agones controller pod in the `kubernetes-pods` section.
 
-> Metrics will be first registered when you will start using Agones.
+{{< alert title="Note" color="info">}}
+Metrics will be first registered when you will start using Agones.
+{{< /alert >}}
 
 Now let's install some Grafana dashboards.
 
@@ -174,7 +181,9 @@ helm install --wait --name grafana stable/grafana --namespace metrics \
 
 This will install Grafana with our prepopulated dashboards and prometheus datasource [previously installed](#prometheus-installation)
 
-> You can also use our {{< ghlink href="/build/Makefile" branch="master" >}}Makefile{{< /ghlink >}} targets (`setup-grafana`,`minikube-setup-grafana` and `kind-setup-grafana`).
+{{< alert title="Note" color="info">}}
+You can also use our {{< ghlink href="/build/Makefile" branch="master" >}}Makefile{{< /ghlink >}} targets (`setup-grafana`, `minikube-setup-grafana` and `kind-setup-grafana`).
+{{< /alert >}}
 
 Finally to access dashboards run
 
@@ -184,7 +193,9 @@ kubectl port-forward deployments/grafana 3000 -n metrics
 
 Open a web browser to [http://localhost:3000](http://localhost:3000), you should see Agones [dashboards](#grafana-dashboards) after login as admin.
 
-> Makefile targets `make grafana-portforward`,`make kind-grafana-portforward` and `make minikube-grafana-portforward`.
+{{< alert title="Note" color="info">}}
+You can also use our `Makefile` targets `make grafana-portforward`, `make kind-grafana-portforward` and `make minikube-grafana-portforward`.
+{{< /alert >}}
 
 ### Stackdriver installation
 

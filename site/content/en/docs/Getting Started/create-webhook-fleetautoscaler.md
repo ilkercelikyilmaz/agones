@@ -7,8 +7,14 @@ description: >
   This guide covers how you can create webhook fleet autoscaler policy.
 ---
 
-The main difference from the Buffer policy is that the logic on how many target replicas you need is delegated to a separate pod.
-This type of Autoscaler would send an HTTP request to the webhook endpoint every sync period (which is currently 30s) with a JSON body, and scale the target fleet based on the data that is returned.
+In some cases, your game servers may need to use custom logic for scaling your fleet that is more complex that what
+can be expressed using the Buffer policy in the fleetautoscaler. This guide shows how you can extend Agones
+with an autoscaler webhook to implement a custom autoscaling policy.
+
+When you use an autoscaler webhook the logic computing the number of target replicas is delegated to an external
+HTTP/S endpoint, such as one provided by a Kubernetes deployment and service in the same cluster (as shown in the
+examples below). The fleetautoscaler will send a request to the webhook autoscaler's `/scale` endpoint every sync
+period (currently 30s) with a JSON body, and scale the target fleet based on the data that is returned.
 
 ## Chapter 1 Configuring HTTP fleetautoscaler webhook
 
@@ -29,7 +35,7 @@ and you have a running fleet of game servers or you could run command from Step 
 
 Run a fleet in a cluster:
 ```
-kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/simple-udp/fleet.yaml
+kubectl apply -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/fleet.yaml
 ```
 
 #### 2. Deploy a Webhook service for autoscaling
@@ -41,11 +47,11 @@ We need to create a pod which will handle HTTP requests with json payload
 [`FleetAutoscaleReview`]({{< relref "../Reference/fleetautoscaler.md#webhook-endpoint-specification" >}}) and return back it
 with [`FleetAutoscaleResponse`]({{< relref "../Reference/fleetautoscaler.md#webhook-endpoint-specification" >}}) populated.
 
-The `Scale` flag and `Replicas` values returned in the `FleetAutoscaleResponse` and `Replicas` value tells the FleetAutoscaler what target size the backing Fleet should be scaled up or down to. If `Scale` is false - no scalling occurs.
+The `Scale` flag and `Replicas` values returned in the `FleetAutoscaleResponse` tells the FleetAutoscaler what target size the backing Fleet should be scaled up or down to. If `Scale` is false - no scaling occurs.
 
 Run next command to create a service and a Webhook pod in a cluster:
 ```
-kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/autoscaler-webhook/autoscaler-service.yaml
+kubectl apply -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/autoscaler-webhook/autoscaler-service.yaml
 ```
 
 To check that it is running and liveness probe is fine:
@@ -66,13 +72,13 @@ Status:         Running
 Let's create a Fleet Autoscaler using the following command:
 
 ```
-kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/webhookfleetautoscaler.yaml
+kubectl apply -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/webhookfleetautoscaler.yaml
 ```
 
 You should see a successful output similar to this:
 
 ```
-fleetautoscaler.stable.agones.sev "webhook-fleet-autoscaler" created
+fleetautoscaler.autoscaling.agones.dev "webhook-fleet-autoscaler" created
 ```
 
 This has created a FleetAutoscaler record inside Kubernetes.
@@ -98,15 +104,18 @@ It should look something like this:
 Name:         webhook-fleet-autoscaler
 Namespace:    default
 Labels:       <none>
-Annotations:  kubectl.kubernetes.io/last-applied-configuration={"apiVersion":"stable.agones.dev/v1alpha1","kind":"FleetAutoscaler","metadata":{"annotations":{},"name":"webhook-fleet-autoscaler","namespace":"default...
-API Version:  stable.agones.dev/v1alpha1
+Annotations:  kubectl.kubernetes.io/last-applied-configuration={"apiVersion":
+"autoscaling.agones.dev/v1","kind":"FleetAutoscaler","metadata":{"annotations"
+:{},"name":"webhook-fleet-autoscaler","namespace":"default...
+API Version:  autoscaling.agones.dev/v1
 Kind:         FleetAutoscaler
 etadata:
   Cluster Name:
   Creation Timestamp:  2018-12-22T12:52:23Z
   Generation:          1
   Resource Version:    2274579
-  Self Link:           /apis/stable.agones.dev/v1alpha1/namespaces/default/fleetautoscalers/webhook-fleet-autoscaler
+  Self Link:           /apis/autoscaling.agones.dev/v1/namespaces/default/fleet
+autoscalers/webhook-fleet-autoscaler
   UID:                 6d03eae4-05e8-11e9-84c2-42010a8a01c9
 Spec:
   Fleet Name:  simple-udp
@@ -138,25 +147,27 @@ If you're interested in more details for game server allocation, you should cons
 Here we only interested in triggering allocations to see the autoscaler in action.
 
 ```
-kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/simple-udp/fleetallocation.yaml -o yaml
+kubectl create -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/gameserverallocation.yaml -o yaml
 ```
 
 You should get in return the allocated game server details, which should end with something like:
+
 ```
-    status:
-      address: 35.247.13.175
-      nodeName: gke-test-cluster-default-1c5dec79-qrqv
-      ports:
-      - name: default
-        port: 7047
-      state: Allocated
+status:
+  address: 34.94.118.237
+  gameServerName: simple-udp-v6jwb-6bzkz
+  nodeName: gke-test-cluster-default-f11755a7-5km3
+  ports:
+  - name: default
+    port: 7832
+  state: Allocated
 ```
 
 Note the address and port, you might need them later to connect to the server.
 
 Run the kubectl command one more time so that we have both servers allocated:
 ```
-kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/simple-udp/fleetallocation.yaml -o yaml
+kubectl create -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/gameserverallocation.yaml -o yaml
 ```
 
 #### 6. Check new Autoscaler and Fleet status
@@ -251,28 +262,29 @@ simple-udp-884fg-b7l58   Allocated   35.247.117.202   7766     minikube   5m
 You can delete the autoscaler service and associated resources with the following commands.
 
 ```
-kubeclt delete -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/master/examples/autoscaler-webhook/autoscaler-service.yaml
+kubectl delete -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/autoscaler-webhook/autoscaler-service.yaml
 ```
 
 
 Removing the fleet:
 ```
-kubectl delete -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/master/examples/simple-udp/fleet.yaml
+kubectl delete -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/fleet.yaml
 ```
 
 ## Chapter 2 Configuring HTTPS fleetautoscaler webhook with CA Bundle
 
 ### Objectives
 
-Using TLS and CA bundle we can establish trusted communication between Fleetautoscaler and Webhook which controls size of the fleet (Replicas count). The certificate of the webhook should be signed by Certificate Authority provided in fleetautoscaler yaml configuration file. Which eliminates the possibility to perform man in the middle attack when using HTTP connection to a webhook which can be located inside or outside of our cluster.
-
-Description of common steps with Chapter 1 would be omitted for simplicity, you can see previous chapter for the details.
+Using TLS and a certificate authority (CA) bundle we can establish trusted communication between Fleetautoscaler and
+an HTTPS server running the autoscaling webhook that controls size of the fleet (Replicas count). The certificate of the
+autoscaling webhook must be signed by the CA provided in fleetautoscaler yaml configuration file. Using TLS eliminates
+the possibility of a man-in-the-middle attack between the fleetautoscaler and the autoscaling webhook.
 
 #### 1. Deploy the fleet
 
 Run a fleet in a cluster:
 ```
-kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/master/examples/simple-udp/fleet.yaml
+kubectl apply -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/fleet.yaml
 ```
 
 #### 2. Create X509 Root and Webhook certificates
@@ -326,7 +338,7 @@ vim $GOPATH/src/agones.dev/agones/examples/webhookfleetautoscalertls.yaml
 
 Run next command to create a service and a Webhook pod in a cluster:
 ```
-kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/master/examples/autoscaler-webhook/autoscaler-service-tls.yaml
+kubectl apply -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/autoscaler-webhook/autoscaler-service-tls.yaml
 ```
 
 To check that it is running and liveness probe is fine:
@@ -364,7 +376,7 @@ If you're interested in more details for game server allocation, you should cons
 Here we only interested in triggering allocations to see the autoscaler in action.
 
 ```
-for i in {0..1} ; do kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/master/examples/simple-udp/fleetallocation.yaml -o yaml ; done
+for i in {0..1} ; do kubectl create -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/gameserverallocation.yaml -o yaml ; done
 ```
 
 #### 7. Check new Autoscaler and Fleet status
@@ -412,7 +424,7 @@ simple-udp-njmr7-65rp6   Allocated   35.203.159.68   7294      minikube   4m
 You can delete the autoscaler service and associated resources with the following commands.
 
 ```
-kubeclt delete -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/master/examples/autoscaler-webhook/autoscaler-service-tls.yaml
+kubectl delete -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/autoscaler-webhook/autoscaler-service-tls.yaml
 ```
 
 Removing x509 key secret:
@@ -422,30 +434,35 @@ kubectl delete secret autoscalersecret
 
 Removing the fleet:
 ```
-kubectl delete -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/master/examples/simple-udp/fleet.yaml
+kubectl delete -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/fleet.yaml
 ```
 
 ### Comments 
 
-Note that now secure communication is established and we can trust our webhook. If we need to use server outside of the kubernetes cluster we can use other Root certificate authority and put it into as caBundle parameter in fleetautoscaler configuration (in pem format, base64-encoded).
+Note that secure communication has been established and we can trust that communication between the fleetautoscaler and
+the autoscaling webhook. If you need to run the autoscaling webhook outside of the Kubernetes cluster, you can use
+another root certificate authority as long as you put it into the caBundle parameter in fleetautoscaler configuration
+(in pem format, base64-encoded).
 
 ## Troubleshooting Guide
 
-There could be some problems with configuration of fleetautoscaler and webhook service.
-Easiest way to debug this is to run:
+If you run into problems with the configuration of your fleetautoscaler and webhook service the easiest way to debug
+them is to run:
 ```
 kubectl describe fleetautoscaler <FleetAutoScalerName>
 ```
-Then you would see events at the bottom of the output.
+and inspect the events at the bottom of the output.
 
 ### Common error messages.
 
-Error when you configure wrong Service Path for the FleetAutoscaler:
+If you have configured the wrong service Path for the FleetAutoscaler you will see a message like
 ```
 Error calculating desired fleet size on FleetAutoscaler simple-fleet-r7fdv-autoscaler. Error: bad status code 404 from the server: https://autoscaler-tls-service.default.svc:8000/scale
 ```
 
-Using hostname other than `autoscaler-tls-service.default.svc` as `Common Name (eg, fully qualified host name)` when creating certificate using `openssl` tool:
+If you are using a hostname other than `autoscaler-tls-service.default.svc` as the
+`Common Name (eg, fully qualified host name)` when creating certificate using `openssl` tool you will see a
+message like
 ```
 Post https://autoscaler-tls-service.default.svc:8000/scale: x509: certificate is not valid for any names, but wanted to match autoscaler-tls-service.default.svc
 ```

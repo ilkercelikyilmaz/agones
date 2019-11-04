@@ -4,11 +4,28 @@ linkTitle: "GameServer Lifecycle"
 date: 2019-02-01T02:15:18Z
 weight: 15
 description: >
-  Shows the life cycle of `GameServer` creation and integration with the SDK, 
+  Common patterns and life cycles of `GameServer` creation and integration with the SDK, 
   when being started and match made.
 ---
 
-![Lifecyle Sequence Diagram](../../../diagrams/gameserver-lifecycle.puml.png)
+## Matchmaker requests a GameServer from a Fleet
+
+This is the preferred workflow for a GameServer, in which an external matchmaker requests an allocation from one or more
+`Fleets` using a `GameServerAllocation`:
+
+![Allocated Lifecyle Sequence Diagram](../../../diagrams/gameserver-lifecycle.puml.png)
+
+## Matchmaker requires game server process registration
+
+Scenarios in which a Matchmaker requires a game server process to register themselves with the matchmaker, and the
+matchmaker decides which `GameServer` players are sent to, this flow is common:
+
+![Reserved Lifecyle Sequence Diagram](../../../diagrams/gameserver-reserved.puml.png)
+
+{{< alert title="Warning" color="warning">}}
+This does relinquish control over how `GameServers` are packed across the cluster to the external matchmaker. It is likely
+  it will not do as good a job at packing and scaling as Agones. 
+{{< /alert >}}
 
 ## Next Steps:
 

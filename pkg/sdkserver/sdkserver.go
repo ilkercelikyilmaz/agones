@@ -15,18 +15,19 @@
 package sdkserver
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"agones.dev/agones/pkg/apis/stable"
-	stablev1alpha1 "agones.dev/agones/pkg/apis/stable/v1alpha1"
+	"agones.dev/agones/pkg/apis/agones"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	"agones.dev/agones/pkg/client/clientset/versioned"
-	typedv1alpha1 "agones.dev/agones/pkg/client/clientset/versioned/typed/stable/v1alpha1"
+	typedv1 "agones.dev/agones/pkg/client/clientset/versioned/typed/agones/v1"
 	"agones.dev/agones/pkg/client/informers/externalversions"
-	listersv1alpha1 "agones.dev/agones/pkg/client/listers/stable/v1alpha1"
+	listersv1 "agones.dev/agones/pkg/client/listers/agones/v1"
 	"agones.dev/agones/pkg/sdk"
 	"agones.dev/agones/pkg/util/logfields"
 	"agones.dev/agones/pkg/util/runtime"
@@ -35,7 +36,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/clock"
@@ -56,31 +56,22 @@ const (
 	updateAnnotation Operation = "updateAnnotation"
 )
 
-var (
-	_ sdk.SDKServer = &SDKServer{}
-
-	defaultTimeout = 30 * time.Second
-	defaultBackoff = wait.Backoff{
-		Duration: 100 * time.Millisecond,
-		Factor:   1,
-		Jitter:   0.1,
-		Steps:    5,
-	}
-)
+var _ sdk.SDKServer = &SDKServer{}
 
 // SDKServer is a gRPC server, that is meant to be a sidecar
 // for a GameServer that will update the game server status on SDK requests
+// nolint: maligned
 type SDKServer struct {
 	logger             *logrus.Entry
 	gameServerName     string
 	namespace          string
 	informerFactory    externalversions.SharedInformerFactory
-	gameServerGetter   typedv1alpha1.GameServersGetter
-	gameServerLister   listersv1alpha1.GameServerLister
+	gameServerGetter   typedv1.GameServersGetter
+	gameServerLister   listersv1.GameServerLister
 	gameServerSynced   cache.InformerSynced
 	server             *http.Server
 	clock              clock.Clock
-	health             stablev1alpha1.Health
+	health             agonesv1.Health
 	healthTimeout      time.Duration
 	healthMutex        sync.RWMutex
 	healthLastUpdated  time.Time
@@ -92,8 +83,11 @@ type SDKServer struct {
 	recorder           record.EventRecorder
 	gsLabels           map[string]string
 	gsAnnotations      map[string]string
-	gsState            stablev1alpha1.GameServerState
+	gsState            agonesv1.GameServerState
 	gsUpdateMutex      sync.RWMutex
+	gsWaitForSync      sync.WaitGroup
+	reserveTimer       *time.Timer
+	gsReserveDuration  *time.Duration
 }
 
 // NewSDKServer creates a SDKServer that sets up an
@@ -107,12 +101,12 @@ func NewSDKServer(gameServerName, namespace string, kubeClient kubernetes.Interf
 		s1 := fields.OneTermEqualSelector("metadata.name", gameServerName)
 		opts.FieldSelector = s1.String()
 	})
-	gameServers := factory.Stable().V1alpha1().GameServers()
+	gameServers := factory.Agones().V1().GameServers()
 
 	s := &SDKServer{
 		gameServerName:   gameServerName,
 		namespace:        namespace,
-		gameServerGetter: agonesClient.StableV1alpha1(),
+		gameServerGetter: agonesClient.AgonesV1(),
 		gameServerLister: gameServers.Lister(),
 		gameServerSynced: gameServers.Informer().HasSynced,
 		server: &http.Server{
@@ -126,6 +120,7 @@ func NewSDKServer(gameServerName, namespace string, kubeClient kubernetes.Interf
 		gsLabels:           map[string]string{},
 		gsAnnotations:      map[string]string{},
 		gsUpdateMutex:      sync.RWMutex{},
+		gsWaitForSync:      sync.WaitGroup{},
 	}
 
 	s.informerFactory = factory
@@ -133,7 +128,7 @@ func NewSDKServer(gameServerName, namespace string, kubeClient kubernetes.Interf
 
 	gameServers.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		UpdateFunc: func(_, newObj interface{}) {
-			gs := newObj.(*stablev1alpha1.GameServer)
+			gs := newObj.(*agonesv1.GameServer)
 			s.sendGameServerUpdate(gs)
 		},
 	})
@@ -162,13 +157,15 @@ func NewSDKServer(gameServerName, namespace string, kubeClient kubernetes.Interf
 		}
 	})
 
+	// we haven't synced yet
+	s.gsWaitForSync.Add(1)
 	s.workerqueue = workerqueue.NewWorkerQueue(
 		s.syncGameServer,
 		s.logger,
 		logfields.GameServerKey,
-		strings.Join([]string{stable.GroupName, s.namespace, s.gameServerName}, "."))
+		strings.Join([]string{agones.GroupName, s.namespace, s.gameServerName}, "."))
 
-	s.logger.Info("created GameServer sidecar")
+	s.logger.Info("Created GameServer sidecar")
 
 	return s, nil
 }
@@ -183,18 +180,41 @@ func (s *SDKServer) initHealthLastUpdated(healthInitialDelay time.Duration) {
 // Will block until stop is closed
 func (s *SDKServer) Run(stop <-chan struct{}) error {
 	s.informerFactory.Start(stop)
-	cache.WaitForCacheSync(stop, s.gameServerSynced)
+	if !cache.WaitForCacheSync(stop, s.gameServerSynced) {
+		return errors.New("failed to wait for caches to sync")
+	}
+	// we have the gameserver details now
+	s.gsWaitForSync.Done()
 
-	gs, err := s.gameServerLister.GameServers(s.namespace).Get(s.gameServerName)
+	gs, err := s.gameServer()
 	if err != nil {
-		return errors.Wrapf(err, "error retrieving gameserver %s/%s", s.namespace, s.gameServerName)
+		return err
 	}
 
+	logLevel := agonesv1.SdkServerLogLevelInfo
 	// grab configuration details
+	if gs.Spec.SdkServer.LogLevel != "" {
+		logLevel = gs.Spec.SdkServer.LogLevel
+	}
+	s.logger.WithField("logLevel", logLevel).Info("Setting LogLevel configuration")
+	level, err := logrus.ParseLevel(strings.ToLower(string(logLevel)))
+	if err == nil {
+		s.logger.Logger.SetLevel(level)
+	} else {
+		s.logger.WithError(err).Info("Specified wrong Logging.SdkServer. Setting default loglevel - Info")
+		s.logger.Logger.SetLevel(logrus.InfoLevel)
+	}
+
 	s.health = gs.Spec.Health
-	s.logger.WithField("health", s.health).Info("setting health configuration")
+	s.logger.WithField("health", s.health).Info("Setting health configuration")
 	s.healthTimeout = time.Duration(gs.Spec.Health.PeriodSeconds) * time.Second
 	s.initHealthLastUpdated(time.Duration(gs.Spec.Health.InitialDelaySeconds) * time.Second)
+
+	if gs.Status.State == agonesv1.GameServerStateReserved && gs.Status.ReservedUntil != nil {
+		s.gsUpdateMutex.Lock()
+		s.resetReserveAfter(context.Background(), time.Until(gs.Status.ReservedUntil.Time))
+		s.gsUpdateMutex.Unlock()
+	}
 
 	// start health checking running
 	if !s.health.Disabled {
@@ -207,7 +227,7 @@ func (s *SDKServer) Run(stop <-chan struct{}) error {
 	go func() {
 		if err := s.server.ListenAndServe(); err != nil {
 			if err == http.ErrServerClosed {
-				s.logger.WithError(err).Info("health check: http server closed")
+				s.logger.WithError(err).Info("Health check: http server closed")
 			} else {
 				err = errors.Wrap(err, "Could not listen on :8080")
 				runtime.HandleError(s.logger.WithError(err), err)
@@ -252,40 +272,67 @@ func (s *SDKServer) updateState() error {
 		return err
 	}
 
-	// if we are currently in shutdown/being deleted, there is no escaping
+	// If we are currently in shutdown/being deleted, there is no escaping.
 	if gs.IsBeingDeleted() {
 		s.logger.Info("GameServerState being shutdown. Skipping update.")
 		return nil
 	}
 
-	// if the state is currently unhealthy, you can't go back to Ready
-	if gs.Status.State == stablev1alpha1.GameServerStateUnhealthy {
+	// If the state is currently unhealthy, you can't go back to Ready.
+	if gs.Status.State == agonesv1.GameServerStateUnhealthy {
 		s.logger.Info("GameServerState already unhealthy. Skipping update.")
 		return nil
 	}
 
 	s.gsUpdateMutex.RLock()
 	gs.Status.State = s.gsState
-	s.gsUpdateMutex.RUnlock()
-	_, err = gameServers.Update(gs)
 
-	// state specific work here
-	if gs.Status.State == stablev1alpha1.GameServerStateUnhealthy {
-		s.recorder.Event(gs, corev1.EventTypeWarning, string(gs.Status.State), "No longer healthy")
+	// If we are setting the Reserved status, check for the duration, and set that too.
+	if gs.Status.State == agonesv1.GameServerStateReserved && s.gsReserveDuration != nil {
+		n := metav1.NewTime(time.Now().Add(*s.gsReserveDuration))
+		gs.Status.ReservedUntil = &n
+	} else {
+		gs.Status.ReservedUntil = nil
+	}
+	s.gsUpdateMutex.RUnlock()
+
+	_, err = gameServers.Update(gs)
+	if err != nil {
+		return errors.Wrapf(err, "could not update GameServer %s/%s to state %s", s.namespace, s.gameServerName, gs.Status.State)
 	}
 
-	return errors.Wrapf(err, "could not update GameServer %s/%s to state %s", s.namespace, s.gameServerName, gs.Status.State)
+	message := "SDK state change"
+	level := corev1.EventTypeNormal
+	// post state specific work here
+	switch gs.Status.State {
+	case agonesv1.GameServerStateUnhealthy:
+		level = corev1.EventTypeWarning
+	case agonesv1.GameServerStateReserved:
+		s.gsUpdateMutex.Lock()
+		if s.gsReserveDuration != nil {
+			message += fmt.Sprintf(", for %s", s.gsReserveDuration)
+			s.resetReserveAfter(context.Background(), *s.gsReserveDuration)
+		}
+		s.gsUpdateMutex.Unlock()
+	}
+
+	s.recorder.Event(gs, level, string(gs.Status.State), message)
+
+	return nil
 }
 
-func (s *SDKServer) gameServer() (*stablev1alpha1.GameServer, error) {
+func (s *SDKServer) gameServer() (*agonesv1.GameServer, error) {
+	// this ensure that if we get requests for the gameserver before the cache has been synced,
+	// they will block here until it's ready
+	s.gsWaitForSync.Wait()
 	gs, err := s.gameServerLister.GameServers(s.namespace).Get(s.gameServerName)
 	return gs, errors.Wrapf(err, "could not retrieve GameServer %s/%s", s.namespace, s.gameServerName)
 }
 
 // updateLabels updates the labels on this GameServer to the ones persisted in SDKServer,
-// i.e. SDKServer.gsLabels, with the prefix of "stable.agones.dev/sdk-"
+// i.e. SDKServer.gsLabels, with the prefix of "agones.dev/sdk-"
 func (s *SDKServer) updateLabels() error {
-	s.logger.WithField("labels", s.gsLabels).Info("updating label")
+	s.logger.WithField("labels", s.gsLabels).Info("Updating label")
 	gs, err := s.gameServer()
 	if err != nil {
 		return err
@@ -307,7 +354,7 @@ func (s *SDKServer) updateLabels() error {
 }
 
 // updateAnnotations updates the Annotations on this GameServer to the ones persisted in SDKServer,
-// i.e. SDKServer.gsAnnotations, with the prefix of "stable.agones.dev/sdk-"
+// i.e. SDKServer.gsAnnotations, with the prefix of "agones.dev/sdk-"
 func (s *SDKServer) updateAnnotations() error {
 	s.logger.WithField("annotations", s.gsAnnotations).Info("updating annotation")
 	gs, err := s.gameServer()
@@ -332,7 +379,7 @@ func (s *SDKServer) updateAnnotations() error {
 
 // enqueueState enqueue a State change request into the
 // workerqueue
-func (s *SDKServer) enqueueState(state stablev1alpha1.GameServerState) {
+func (s *SDKServer) enqueueState(state agonesv1.GameServerState) {
 	s.gsUpdateMutex.Lock()
 	s.gsState = state
 	s.gsUpdateMutex.Unlock()
@@ -343,59 +390,24 @@ func (s *SDKServer) enqueueState(state stablev1alpha1.GameServerState) {
 // the workqueue so it can be updated
 func (s *SDKServer) Ready(ctx context.Context, e *sdk.Empty) (*sdk.Empty, error) {
 	s.logger.Info("Received Ready request, adding to queue")
-	s.enqueueState(stablev1alpha1.GameServerStateRequestReady)
+	s.stopReserveTimer()
+	s.enqueueState(agonesv1.GameServerStateRequestReady)
 	return e, nil
 }
 
-// Allocate set the GameServer to Allocate, as longs as it's not in UnHealthy,
-// Shutdown or has a DeletionTimeStamp(). Times out after 30 seconds if it cannot
-// complete the operation due to contention issues.
-func (s *SDKServer) Allocate(context.Context, *sdk.Empty) (*sdk.Empty, error) {
-	s.logger.Info("Received self Allocate request")
-
-	now := s.clock.Now()
-	err := wait.ExponentialBackoff(defaultBackoff, func() (done bool, err error) {
-		gs, err := s.gameServer()
-		if err != nil {
-			return true, err
-		}
-
-		if !gs.ObjectMeta.DeletionTimestamp.IsZero() {
-			return true, nil
-		}
-
-		switch gs.Status.State {
-		case stablev1alpha1.GameServerStateUnhealthy:
-			return true, errors.New("cannot Allocate an Unhealthy GameServer")
-
-		case stablev1alpha1.GameServerStateShutdown:
-			return true, errors.New("cannot Allocate a Shutdown GameServer")
-		}
-
-		gsCopy := gs.DeepCopy()
-		gsCopy.Status.State = stablev1alpha1.GameServerStateAllocated
-		_, err = s.gameServerGetter.GameServers(s.namespace).Update(gsCopy)
-
-		// if a contention, and we are under the timeout period.
-		if k8serrors.IsConflict(err) {
-			if s.clock.Since(now) > defaultTimeout {
-				return true, errors.New("Allocation request timed out")
-			}
-
-			return false, nil
-		}
-
-		return true, errors.Wrap(err, "could not update gameserver to Allocated")
-	})
-
-	return &sdk.Empty{}, errors.WithStack(err)
+// Allocate enters an Allocate state change into the workqueue, so it can be updated
+func (s *SDKServer) Allocate(ctx context.Context, e *sdk.Empty) (*sdk.Empty, error) {
+	s.stopReserveTimer()
+	s.enqueueState(agonesv1.GameServerStateAllocated)
+	return e, nil
 }
 
 // Shutdown enters the Shutdown state change for this GameServer into
 // the workqueue so it can be updated
 func (s *SDKServer) Shutdown(ctx context.Context, e *sdk.Empty) (*sdk.Empty, error) {
 	s.logger.Info("Received Shutdown request, adding to queue")
-	s.enqueueState(stablev1alpha1.GameServerStateShutdown)
+	s.stopReserveTimer()
+	s.enqueueState(agonesv1.GameServerStateShutdown)
 	return e, nil
 }
 
@@ -465,8 +477,53 @@ func (s *SDKServer) WatchGameServer(_ *sdk.Empty, stream sdk.SDK_WatchGameServer
 	return nil
 }
 
+// Reserve moves this GameServer to the Reserved state for the Duration specified
+func (s *SDKServer) Reserve(ctx context.Context, d *sdk.Duration) (*sdk.Empty, error) {
+	s.stopReserveTimer()
+
+	e := &sdk.Empty{}
+
+	// 0 is forever.
+	if d.Seconds > 0 {
+		duration := time.Duration(d.Seconds) * time.Second
+		s.gsUpdateMutex.Lock()
+		s.gsReserveDuration = &duration
+		s.gsUpdateMutex.Unlock()
+	}
+
+	s.logger.Info("Received Reserve request, adding to queue")
+	s.enqueueState(agonesv1.GameServerStateReserved)
+
+	return e, nil
+}
+
+// resetReserveAfter will move the GameServer back to being ready after the specified duration.
+// This function should be wrapped in a s.gsUpdateMutex lock when being called.
+func (s *SDKServer) resetReserveAfter(ctx context.Context, duration time.Duration) {
+	if s.reserveTimer != nil {
+		s.reserveTimer.Stop()
+	}
+
+	s.reserveTimer = time.AfterFunc(duration, func() {
+		if _, err := s.Ready(ctx, &sdk.Empty{}); err != nil {
+			s.logger.WithError(errors.WithStack(err)).Error("error returning to Ready after reserved")
+		}
+	})
+}
+
+// stopReserveTimer stops the reserve timer. This is a no-op and safe to call if the timer is nil
+func (s *SDKServer) stopReserveTimer() {
+	s.gsUpdateMutex.Lock()
+	defer s.gsUpdateMutex.Unlock()
+
+	if s.reserveTimer != nil {
+		s.reserveTimer.Stop()
+	}
+	s.gsReserveDuration = nil
+}
+
 // sendGameServerUpdate sends a watch game server event
-func (s *SDKServer) sendGameServerUpdate(gs *stablev1alpha1.GameServer) {
+func (s *SDKServer) sendGameServerUpdate(gs *agonesv1.GameServer) {
 	s.logger.Info("Sending GameServer Event to connectedStreams")
 
 	s.streamMutex.RLock()
@@ -490,8 +547,8 @@ func (s *SDKServer) sendGameServerUpdate(gs *stablev1alpha1.GameServer) {
 func (s *SDKServer) runHealth() {
 	s.checkHealth()
 	if !s.healthy() {
-		s.logger.WithField("gameServerName", s.gameServerName).Info("has failed health check")
-		s.enqueueState(stablev1alpha1.GameServerStateUnhealthy)
+		s.logger.WithField("gameServerName", s.gameServerName).Info("GameServer has failed health check")
+		s.enqueueState(agonesv1.GameServerStateUnhealthy)
 	}
 }
 

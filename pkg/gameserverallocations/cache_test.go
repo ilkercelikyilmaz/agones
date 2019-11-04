@@ -1,4 +1,4 @@
-// Copyright 2019 Google Inc. All Rights Reserved.
+// Copyright 2019 Google LLC All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,15 +17,15 @@ package gameserverallocations
 import (
 	"testing"
 
-	"agones.dev/agones/pkg/apis/stable/v1alpha1"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestGameServerCacheEntry(t *testing.T) {
-	gs1 := &v1alpha1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs1"}}
-	gs2 := &v1alpha1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs2"}}
-	gs3 := &v1alpha1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs3"}}
+	gs1 := &agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs1"}}
+	gs2 := &agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs2"}}
+	gs3 := &agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs3"}}
 
 	cache := gameServerCacheEntry{}
 
@@ -43,7 +43,7 @@ func TestGameServerCacheEntry(t *testing.T) {
 	cache.Store("gs3", gs3)
 
 	count := 0
-	cache.Range(func(key string, gs *v1alpha1.GameServer) bool {
+	cache.Range(func(key string, gs *agonesv1.GameServer) bool {
 		if count++; count == 2 {
 			return false
 		}

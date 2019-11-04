@@ -24,9 +24,10 @@ import (
 	time "time"
 
 	versioned "agones.dev/agones/pkg/client/clientset/versioned"
+	agones "agones.dev/agones/pkg/client/informers/externalversions/agones"
+	autoscaling "agones.dev/agones/pkg/client/informers/externalversions/autoscaling"
 	internalinterfaces "agones.dev/agones/pkg/client/informers/externalversions/internalinterfaces"
 	multicluster "agones.dev/agones/pkg/client/informers/externalversions/multicluster"
-	stable "agones.dev/agones/pkg/client/informers/externalversions/stable"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -173,14 +174,19 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
+	Agones() agones.Interface
+	Autoscaling() autoscaling.Interface
 	Multicluster() multicluster.Interface
-	Stable() stable.Interface
+}
+
+func (f *sharedInformerFactory) Agones() agones.Interface {
+	return agones.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Autoscaling() autoscaling.Interface {
+	return autoscaling.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) Multicluster() multicluster.Interface {
 	return multicluster.New(f, f.namespace, f.tweakListOptions)
-}
-
-func (f *sharedInformerFactory) Stable() stable.Interface {
-	return stable.New(f, f.namespace, f.tweakListOptions)
 }

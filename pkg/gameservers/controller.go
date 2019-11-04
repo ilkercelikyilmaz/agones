@@ -17,15 +17,17 @@ package gameservers
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"strconv"
 	"sync"
 	"time"
 
-	"agones.dev/agones/pkg/apis/stable"
-	"agones.dev/agones/pkg/apis/stable/v1alpha1"
+	"agones.dev/agones/pkg/apis/agones"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	"agones.dev/agones/pkg/client/clientset/versioned"
-	getterv1alpha1 "agones.dev/agones/pkg/client/clientset/versioned/typed/stable/v1alpha1"
+	getterv1 "agones.dev/agones/pkg/client/clientset/versioned/typed/agones/v1"
 	"agones.dev/agones/pkg/client/informers/externalversions"
-	listerv1alpha1 "agones.dev/agones/pkg/client/listers/stable/v1alpha1"
+	listerv1 "agones.dev/agones/pkg/client/listers/agones/v1"
 	"agones.dev/agones/pkg/util/crd"
 	"agones.dev/agones/pkg/util/logfields"
 	"agones.dev/agones/pkg/util/runtime"
@@ -54,6 +56,12 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
+const (
+	sdkserverSidecarName = "agones-gameserver-sidecar"
+	grpcPortEnvVar       = "AGONES_SDK_GRPC_PORT"
+	httpPortEnvVar       = "AGONES_SDK_HTTP_PORT"
+)
+
 // Controller is a the main GameServer crd controller
 type Controller struct {
 	baseLogger             *logrus.Entry
@@ -66,8 +74,8 @@ type Controller struct {
 	podGetter              typedcorev1.PodsGetter
 	podLister              corelisterv1.PodLister
 	podSynced              cache.InformerSynced
-	gameServerGetter       getterv1alpha1.GameServersGetter
-	gameServerLister       listerv1alpha1.GameServerLister
+	gameServerGetter       getterv1.GameServersGetter
+	gameServerLister       listerv1.GameServerLister
 	gameServerSynced       cache.InformerSynced
 	nodeLister             corelisterv1.NodeLister
 	nodeSynced             cache.InformerSynced
@@ -97,7 +105,7 @@ func NewController(
 	agonesInformerFactory externalversions.SharedInformerFactory) *Controller {
 
 	pods := kubeInformerFactory.Core().V1().Pods()
-	gameServers := agonesInformerFactory.Stable().V1alpha1().GameServers()
+	gameServers := agonesInformerFactory.Agones().V1().GameServers()
 	gsInformer := gameServers.Informer()
 
 	c := &Controller{
@@ -110,13 +118,13 @@ func NewController(
 		podGetter:              kubeClient.CoreV1(),
 		podLister:              pods.Lister(),
 		podSynced:              pods.Informer().HasSynced,
-		gameServerGetter:       agonesClient.StableV1alpha1(),
+		gameServerGetter:       agonesClient.AgonesV1(),
 		gameServerLister:       gameServers.Lister(),
 		gameServerSynced:       gsInformer.HasSynced,
 		nodeLister:             kubeInformerFactory.Core().V1().Nodes().Lister(),
 		nodeSynced:             kubeInformerFactory.Core().V1().Nodes().Informer().HasSynced,
 		portAllocator:          NewPortAllocator(minPort, maxPort, kubeInformerFactory, agonesInformerFactory),
-		healthController:       NewHealthController(kubeClient, agonesClient, kubeInformerFactory, agonesInformerFactory),
+		healthController:       NewHealthController(health, kubeClient, agonesClient, kubeInformerFactory, agonesInformerFactory),
 	}
 
 	c.baseLogger = runtime.NewLoggerWithType(c)
@@ -126,22 +134,22 @@ func NewController(
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 	c.recorder = eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "gameserver-controller"})
 
-	c.workerqueue = workerqueue.NewWorkerQueueWithRateLimiter(c.syncGameServer, c.baseLogger, logfields.GameServerKey, stable.GroupName+".GameServerController", fastRateLimiter())
-	c.creationWorkerQueue = workerqueue.NewWorkerQueueWithRateLimiter(c.syncGameServer, c.baseLogger.WithField("subqueue", "creation"), logfields.GameServerKey, stable.GroupName+".GameServerControllerCreation", fastRateLimiter())
-	c.deletionWorkerQueue = workerqueue.NewWorkerQueueWithRateLimiter(c.syncGameServer, c.baseLogger.WithField("subqueue", "deletion"), logfields.GameServerKey, stable.GroupName+".GameServerControllerDeletion", fastRateLimiter())
+	c.workerqueue = workerqueue.NewWorkerQueueWithRateLimiter(c.syncGameServer, c.baseLogger, logfields.GameServerKey, agones.GroupName+".GameServerController", fastRateLimiter())
+	c.creationWorkerQueue = workerqueue.NewWorkerQueueWithRateLimiter(c.syncGameServer, c.baseLogger.WithField("subqueue", "creation"), logfields.GameServerKey, agones.GroupName+".GameServerControllerCreation", fastRateLimiter())
+	c.deletionWorkerQueue = workerqueue.NewWorkerQueueWithRateLimiter(c.syncGameServer, c.baseLogger.WithField("subqueue", "deletion"), logfields.GameServerKey, agones.GroupName+".GameServerControllerDeletion", fastRateLimiter())
 	health.AddLivenessCheck("gameserver-workerqueue", healthcheck.Check(c.workerqueue.Healthy))
 	health.AddLivenessCheck("gameserver-creation-workerqueue", healthcheck.Check(c.creationWorkerQueue.Healthy))
 	health.AddLivenessCheck("gameserver-deletion-workerqueue", healthcheck.Check(c.deletionWorkerQueue.Healthy))
 
-	wh.AddHandler("/mutate", v1alpha1.Kind("GameServer"), admv1beta1.Create, c.creationMutationHandler)
-	wh.AddHandler("/validate", v1alpha1.Kind("GameServer"), admv1beta1.Create, c.creationValidationHandler)
+	wh.AddHandler("/mutate", agonesv1.Kind("GameServer"), admv1beta1.Create, c.creationMutationHandler)
+	wh.AddHandler("/validate", agonesv1.Kind("GameServer"), admv1beta1.Create, c.creationValidationHandler)
 
 	gsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: c.enqueueGameServerBasedOnState,
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			// no point in processing unless there is a State change
-			oldGs := oldObj.(*v1alpha1.GameServer)
-			newGs := newObj.(*v1alpha1.GameServer)
+			oldGs := oldObj.(*agonesv1.GameServer)
+			newGs := newObj.(*agonesv1.GameServer)
 			if oldGs.Status.State != newGs.Status.State || oldGs.ObjectMeta.DeletionTimestamp != newGs.ObjectMeta.DeletionTimestamp {
 				c.enqueueGameServerBasedOnState(newGs)
 			}
@@ -175,14 +183,14 @@ func NewController(
 }
 
 func (c *Controller) enqueueGameServerBasedOnState(item interface{}) {
-	gs := item.(*v1alpha1.GameServer)
+	gs := item.(*agonesv1.GameServer)
 
 	switch gs.Status.State {
-	case v1alpha1.GameServerStatePortAllocation,
-		v1alpha1.GameServerStateCreating:
+	case agonesv1.GameServerStatePortAllocation,
+		agonesv1.GameServerStateCreating:
 		c.creationWorkerQueue.Enqueue(gs)
 
-	case v1alpha1.GameServerStateShutdown:
+	case agonesv1.GameServerStateShutdown:
 		c.deletionWorkerQueue.Enqueue(gs)
 
 	default:
@@ -205,7 +213,7 @@ func fastRateLimiter() workqueue.RateLimiter {
 // nolint:dupl
 func (c *Controller) creationMutationHandler(review admv1beta1.AdmissionReview) (admv1beta1.AdmissionReview, error) {
 	obj := review.Request.Object
-	gs := &v1alpha1.GameServer{}
+	gs := &agonesv1.GameServer{}
 	err := json.Unmarshal(obj.Raw, gs)
 	if err != nil {
 		c.baseLogger.WithField("review", review).WithError(err).Info("creationMutationHandler failed to unmarshal JSON")
@@ -244,7 +252,7 @@ func (c *Controller) loggerForGameServerKey(key string) *logrus.Entry {
 	return logfields.AugmentLogEntry(c.baseLogger, logfields.GameServerKey, key)
 }
 
-func (c *Controller) loggerForGameServer(gs *v1alpha1.GameServer) *logrus.Entry {
+func (c *Controller) loggerForGameServer(gs *agonesv1.GameServer) *logrus.Entry {
 	gsName := "NilGameServer"
 	if gs != nil {
 		gsName = gs.Namespace + "/" + gs.Name
@@ -256,7 +264,7 @@ func (c *Controller) loggerForGameServer(gs *v1alpha1.GameServer) *logrus.Entry 
 // Should only be called on gameserver create operations.
 func (c *Controller) creationValidationHandler(review admv1beta1.AdmissionReview) (admv1beta1.AdmissionReview, error) {
 	obj := review.Request.Object
-	gs := &v1alpha1.GameServer{}
+	gs := &agonesv1.GameServer{}
 	err := json.Unmarshal(obj.Raw, gs)
 	if err != nil {
 		c.baseLogger.WithField("review", review).WithError(err).Info("creationValidationHandler failed to unmarshal JSON")
@@ -293,7 +301,7 @@ func (c *Controller) creationValidationHandler(review admv1beta1.AdmissionReview
 func (c *Controller) Run(workers int, stop <-chan struct{}) error {
 	c.stop = stop
 
-	err := crd.WaitForEstablishedCRD(c.crdGetter, "gameservers.stable.agones.dev", c.baseLogger)
+	err := crd.WaitForEstablishedCRD(c.crdGetter, "gameservers.agones.dev", c.baseLogger)
 	if err != nil {
 		return err
 	}
@@ -309,7 +317,12 @@ func (c *Controller) Run(workers int, stop <-chan struct{}) error {
 	}
 
 	// Run the Health Controller
-	go c.healthController.Run(stop)
+	go func() {
+		err = c.healthController.Run(stop)
+		if err != nil {
+			c.baseLogger.WithError(err).Error("error running health controller")
+		}
+	}()
 
 	// start work queues
 	var wg sync.WaitGroup
@@ -380,7 +393,7 @@ func (c *Controller) syncGameServer(key string) error {
 // then do one of two things:
 // - if the GameServer has Pods running, delete them
 // - if there no pods, remove the finalizer
-func (c *Controller) syncGameServerDeletionTimestamp(gs *v1alpha1.GameServer) (*v1alpha1.GameServer, error) {
+func (c *Controller) syncGameServerDeletionTimestamp(gs *agonesv1.GameServer) (*agonesv1.GameServer, error) {
 	if gs.ObjectMeta.DeletionTimestamp.IsZero() {
 		return gs, nil
 	}
@@ -411,25 +424,25 @@ func (c *Controller) syncGameServerDeletionTimestamp(gs *v1alpha1.GameServer) (*
 	// remove the finalizer for this controller
 	var fin []string
 	for _, f := range gsCopy.ObjectMeta.Finalizers {
-		if f != stable.GroupName {
+		if f != agones.GroupName {
 			fin = append(fin, f)
 		}
 	}
 	gsCopy.ObjectMeta.Finalizers = fin
-	c.loggerForGameServer(gsCopy).Infof("No pods found, removing finalizer %s", stable.GroupName)
+	c.loggerForGameServer(gsCopy).Infof("No pods found, removing finalizer %s", agones.GroupName)
 	gs, err = c.gameServerGetter.GameServers(gsCopy.ObjectMeta.Namespace).Update(gsCopy)
 	return gs, errors.Wrapf(err, "error removing finalizer for GameServer %s", gsCopy.ObjectMeta.Name)
 }
 
 // syncGameServerPortAllocationState gives a port to a dynamically allocating GameServer
-func (c *Controller) syncGameServerPortAllocationState(gs *v1alpha1.GameServer) (*v1alpha1.GameServer, error) {
-	if !(gs.Status.State == v1alpha1.GameServerStatePortAllocation && gs.ObjectMeta.DeletionTimestamp.IsZero()) {
+func (c *Controller) syncGameServerPortAllocationState(gs *agonesv1.GameServer) (*agonesv1.GameServer, error) {
+	if !(gs.Status.State == agonesv1.GameServerStatePortAllocation && gs.ObjectMeta.DeletionTimestamp.IsZero()) {
 		return gs, nil
 	}
 
 	gsCopy := c.portAllocator.Allocate(gs.DeepCopy())
 
-	gsCopy.Status.State = v1alpha1.GameServerStateCreating
+	gsCopy.Status.State = agonesv1.GameServerStateCreating
 	c.recorder.Event(gs, corev1.EventTypeNormal, string(gs.Status.State), "Port allocated")
 
 	c.loggerForGameServer(gsCopy).Info("Syncing Port Allocation GameServerState")
@@ -446,8 +459,8 @@ func (c *Controller) syncGameServerPortAllocationState(gs *v1alpha1.GameServer) 
 
 // syncGameServerCreatingState checks if the GameServer is in the Creating state, and if so
 // creates a Pod for the GameServer and moves the state to Starting
-func (c *Controller) syncGameServerCreatingState(gs *v1alpha1.GameServer) (*v1alpha1.GameServer, error) {
-	if !(gs.Status.State == v1alpha1.GameServerStateCreating && gs.ObjectMeta.DeletionTimestamp.IsZero()) {
+func (c *Controller) syncGameServerCreatingState(gs *agonesv1.GameServer) (*agonesv1.GameServer, error) {
+	if !(gs.Status.State == agonesv1.GameServerStateCreating && gs.ObjectMeta.DeletionTimestamp.IsZero()) {
 		return gs, nil
 	}
 	if _, isDev := gs.GetDevAddress(); isDev {
@@ -460,7 +473,7 @@ func (c *Controller) syncGameServerCreatingState(gs *v1alpha1.GameServer) (*v1al
 	_, err := c.gameServerPod(gs)
 	if k8serrors.IsNotFound(err) {
 		gs, err = c.createGameServerPod(gs)
-		if err != nil || gs.Status.State == v1alpha1.GameServerStateError {
+		if err != nil || gs.Status.State == agonesv1.GameServerStateError {
 			return gs, err
 		}
 	}
@@ -470,7 +483,7 @@ func (c *Controller) syncGameServerCreatingState(gs *v1alpha1.GameServer) (*v1al
 	}
 
 	gsCopy := gs.DeepCopy()
-	gsCopy.Status.State = v1alpha1.GameServerStateStarting
+	gsCopy.Status.State = agonesv1.GameServerStateStarting
 	gs, err = c.gameServerGetter.GameServers(gs.ObjectMeta.Namespace).Update(gsCopy)
 	if err != nil {
 		return gs, errors.Wrapf(err, "error updating GameServer %s to Starting state", gs.Name)
@@ -479,7 +492,7 @@ func (c *Controller) syncGameServerCreatingState(gs *v1alpha1.GameServer) (*v1al
 }
 
 // syncDevelopmentGameServer manages advances a development gameserver to Ready status and registers its address and ports.
-func (c *Controller) syncDevelopmentGameServer(gs *v1alpha1.GameServer) (*v1alpha1.GameServer, error) {
+func (c *Controller) syncDevelopmentGameServer(gs *agonesv1.GameServer) (*agonesv1.GameServer, error) {
 	// do not sync if the server is deleting.
 	if !(gs.ObjectMeta.DeletionTimestamp.IsZero()) {
 		return gs, nil
@@ -490,17 +503,17 @@ func (c *Controller) syncDevelopmentGameServer(gs *v1alpha1.GameServer) (*v1alph
 		return gs, nil
 	}
 
-	if !(gs.Status.State == v1alpha1.GameServerStateReady) {
+	if !(gs.Status.State == agonesv1.GameServerStateReady) {
 		c.loggerForGameServer(gs).Info("GS is a development game server and will not be managed by Agones.")
 	}
 
 	gsCopy := gs.DeepCopy()
-	var ports []v1alpha1.GameServerStatusPort
+	var ports []agonesv1.GameServerStatusPort
 	for _, p := range gs.Spec.Ports {
 		ports = append(ports, p.Status())
 	}
 	// TODO: Use UpdateStatus() when it's available.
-	gsCopy.Status.State = v1alpha1.GameServerStateReady
+	gsCopy.Status.State = agonesv1.GameServerStateReady
 	gsCopy.Status.Ports = ports
 	gsCopy.Status.Address = devIPAddress
 	gsCopy.Status.NodeName = devIPAddress
@@ -512,13 +525,11 @@ func (c *Controller) syncDevelopmentGameServer(gs *v1alpha1.GameServer) (*v1alph
 }
 
 // createGameServerPod creates the backing Pod for a given GameServer
-func (c *Controller) createGameServerPod(gs *v1alpha1.GameServer) (*v1alpha1.GameServer, error) {
+func (c *Controller) createGameServerPod(gs *agonesv1.GameServer) (*agonesv1.GameServer, error) {
 	sidecar := c.sidecar(gs)
-	var pod *corev1.Pod
 	pod, err := gs.Pod(sidecar)
-
-	// this shouldn't happen, but if it does.
 	if err != nil {
+		// this shouldn't happen, but if it does.
 		c.loggerForGameServer(gs).WithError(err).Error("error creating pod from Game Server")
 		gs, err = c.moveToErrorState(gs, err.Error())
 		return gs, err
@@ -533,6 +544,7 @@ func (c *Controller) createGameServerPod(gs *v1alpha1.GameServer) (*v1alpha1.Gam
 	}
 
 	c.addGameServerHealthCheck(gs, pod)
+	c.addSDKServerEnvVars(gs, pod)
 
 	c.loggerForGameServer(gs).WithField("pod", pod).Info("creating Pod for GameServer")
 	pod, err = c.podGetter.Pods(gs.ObjectMeta.Namespace).Create(pod)
@@ -555,9 +567,9 @@ func (c *Controller) createGameServerPod(gs *v1alpha1.GameServer) (*v1alpha1.Gam
 }
 
 // sidecar creates the sidecar container for a given GameServer
-func (c *Controller) sidecar(gs *v1alpha1.GameServer) corev1.Container {
+func (c *Controller) sidecar(gs *agonesv1.GameServer) corev1.Container {
 	sidecar := corev1.Container{
-		Name:  "agones-gameserver-sidecar",
+		Name:  sdkserverSidecarName,
 		Image: c.sidecarImage,
 		Env: []corev1.EnvVar{
 			{
@@ -586,6 +598,14 @@ func (c *Controller) sidecar(gs *v1alpha1.GameServer) corev1.Container {
 		},
 	}
 
+	if gs.Spec.SdkServer.GRPCPort != 0 {
+		sidecar.Args = append(sidecar.Args, fmt.Sprintf("--grpc-port=%d", gs.Spec.SdkServer.GRPCPort))
+	}
+
+	if gs.Spec.SdkServer.HTTPPort != 0 {
+		sidecar.Args = append(sidecar.Args, fmt.Sprintf("--http-port=%d", gs.Spec.SdkServer.HTTPPort))
+	}
+
 	if !c.sidecarCPURequest.IsZero() {
 		sidecar.Resources.Requests = corev1.ResourceList{corev1.ResourceCPU: c.sidecarCPURequest}
 	}
@@ -601,7 +621,7 @@ func (c *Controller) sidecar(gs *v1alpha1.GameServer) corev1.Container {
 }
 
 // addGameServerHealthCheck adds the http health check to the GameServer container
-func (c *Controller) addGameServerHealthCheck(gs *v1alpha1.GameServer, pod *corev1.Pod) {
+func (c *Controller) addGameServerHealthCheck(gs *agonesv1.GameServer, pod *corev1.Pod) {
 	if gs.Spec.Health.Disabled {
 		return
 	}
@@ -625,10 +645,55 @@ func (c *Controller) addGameServerHealthCheck(gs *v1alpha1.GameServer, pod *core
 	})
 }
 
+func (c *Controller) addSDKServerEnvVars(gs *agonesv1.GameServer, pod *corev1.Pod) {
+	for i, c := range pod.Spec.Containers {
+		if c.Name != sdkserverSidecarName {
+			sdkEnvVars := sdkEnvironmentVariables(gs)
+			if sdkEnvVars == nil {
+				// If a gameserver was created before 1.1 when we started defaulting the grpc and http ports,
+				// don't change the container spec.
+				continue
+			}
+
+			// Filter out environment variables that have reserved names.
+			// From https://github.com/golang/go/wiki/SliceTricks#filtering-without-allocating
+			env := c.Env[:0]
+			for _, e := range c.Env {
+				if !reservedEnvironmentVariableName(e.Name) {
+					env = append(env, e)
+				}
+			}
+			c.Env = append(env, sdkEnvVars...)
+			pod.Spec.Containers[i] = c
+		}
+	}
+}
+
+func reservedEnvironmentVariableName(name string) bool {
+	return name == grpcPortEnvVar || name == httpPortEnvVar
+}
+
+func sdkEnvironmentVariables(gs *agonesv1.GameServer) []corev1.EnvVar {
+	var env []corev1.EnvVar
+	if gs.Spec.SdkServer.GRPCPort != 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  grpcPortEnvVar,
+			Value: strconv.Itoa(int(gs.Spec.SdkServer.GRPCPort)),
+		})
+	}
+	if gs.Spec.SdkServer.HTTPPort != 0 {
+		env = append(env, corev1.EnvVar{
+			Name:  httpPortEnvVar,
+			Value: strconv.Itoa(int(gs.Spec.SdkServer.HTTPPort)),
+		})
+	}
+	return env
+}
+
 // syncGameServerStartingState looks for a pod that has been scheduled for this GameServer
 // and then sets the Status > Address and Ports values.
-func (c *Controller) syncGameServerStartingState(gs *v1alpha1.GameServer) (*v1alpha1.GameServer, error) {
-	if !(gs.Status.State == v1alpha1.GameServerStateStarting && gs.ObjectMeta.DeletionTimestamp.IsZero()) {
+func (c *Controller) syncGameServerStartingState(gs *agonesv1.GameServer) (*agonesv1.GameServer, error) {
+	if !(gs.Status.State == agonesv1.GameServerStateStarting && gs.ObjectMeta.DeletionTimestamp.IsZero()) {
 		return gs, nil
 	}
 	if _, isDev := gs.GetDevAddress(); isDev {
@@ -651,7 +716,7 @@ func (c *Controller) syncGameServerStartingState(gs *v1alpha1.GameServer) (*v1al
 		return gs, err
 	}
 
-	gsCopy.Status.State = v1alpha1.GameServerStateScheduled
+	gsCopy.Status.State = agonesv1.GameServerStateScheduled
 	gs, err = c.gameServerGetter.GameServers(gs.ObjectMeta.Namespace).Update(gsCopy)
 	if err != nil {
 		return gs, errors.Wrapf(err, "error updating GameServer %s to Scheduled state", gs.Name)
@@ -663,7 +728,7 @@ func (c *Controller) syncGameServerStartingState(gs *v1alpha1.GameServer) (*v1al
 
 // applyGameServerAddressAndPort gets the backing Pod for the GamesServer,
 // and sets the allocated Address and Port values to it and returns it.
-func (c *Controller) applyGameServerAddressAndPort(gs *v1alpha1.GameServer, pod *corev1.Pod) (*v1alpha1.GameServer, error) {
+func (c *Controller) applyGameServerAddressAndPort(gs *agonesv1.GameServer, pod *corev1.Pod) (*agonesv1.GameServer, error) {
 	addr, err := c.address(gs, pod)
 	if err != nil {
 		return gs, errors.Wrapf(err, "error getting external address for GameServer %s", gs.ObjectMeta.Name)
@@ -673,7 +738,7 @@ func (c *Controller) applyGameServerAddressAndPort(gs *v1alpha1.GameServer, pod 
 	gs.Status.NodeName = pod.Spec.NodeName
 	// HostPort is always going to be populated, even when dynamic
 	// This will be a double up of information, but it will be easier to read
-	gs.Status.Ports = make([]v1alpha1.GameServerStatusPort, len(gs.Spec.Ports))
+	gs.Status.Ports = make([]agonesv1.GameServerStatusPort, len(gs.Spec.Ports))
 	for i, p := range gs.Spec.Ports {
 		gs.Status.Ports[i] = p.Status()
 	}
@@ -684,9 +749,9 @@ func (c *Controller) applyGameServerAddressAndPort(gs *v1alpha1.GameServer, pod 
 // syncGameServerRequestReadyState checks if the Game Server is Requesting to be ready,
 // and then adds the IP and Port information to the Status and marks the GameServer
 // as Ready
-func (c *Controller) syncGameServerRequestReadyState(gs *v1alpha1.GameServer) (*v1alpha1.GameServer, error) {
-	if !(gs.Status.State == v1alpha1.GameServerStateRequestReady && gs.ObjectMeta.DeletionTimestamp.IsZero()) ||
-		gs.Status.State == v1alpha1.GameServerStateUnhealthy {
+func (c *Controller) syncGameServerRequestReadyState(gs *agonesv1.GameServer) (*agonesv1.GameServer, error) {
+	if !(gs.Status.State == agonesv1.GameServerStateRequestReady && gs.ObjectMeta.DeletionTimestamp.IsZero()) ||
+		gs.Status.State == agonesv1.GameServerStateUnhealthy {
 		return gs, nil
 	}
 	if _, isDev := gs.GetDevAddress(); isDev {
@@ -697,26 +762,38 @@ func (c *Controller) syncGameServerRequestReadyState(gs *v1alpha1.GameServer) (*
 
 	gsCopy := gs.DeepCopy()
 
+	pod, err := c.gameServerPod(gs)
+	// NotFound should never happen, and if it does -- something bad happened,
+	// so go into workerqueue backoff.
+	if err != nil {
+		return nil, err
+	}
+
 	// if the address hasn't been populated, and the Ready request comes
 	// before the controller has had a chance to do it, then
 	// do it here instead
 	addressPopulated := false
 	if gs.Status.NodeName == "" {
 		addressPopulated = true
-		pod, err := c.gameServerPod(gs)
-		// NotFound should never happen, and if it does -- something bad happened,
-		// so go into workerqueue backoff.
-		if err != nil {
-			return nil, err
-		}
 		gsCopy, err = c.applyGameServerAddressAndPort(gsCopy, pod)
 		if err != nil {
 			return gs, err
 		}
 	}
 
-	gsCopy.Status.State = v1alpha1.GameServerStateReady
-	gs, err := c.gameServerGetter.GameServers(gs.ObjectMeta.Namespace).Update(gsCopy)
+	// track the ready gameserver container, so we can determine that after this point, we should move to Unhealthy
+	// if there is a container crash/restart after we move to Ready
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name == gs.Spec.Container {
+			if _, ok := gs.ObjectMeta.Annotations[agonesv1.GameServerReadyContainerIDAnnotation]; !ok {
+				gsCopy.ObjectMeta.Annotations[agonesv1.GameServerReadyContainerIDAnnotation] = cs.ContainerID
+			}
+			break
+		}
+	}
+
+	gsCopy.Status.State = agonesv1.GameServerStateReady
+	gs, err = c.gameServerGetter.GameServers(gs.ObjectMeta.Namespace).Update(gsCopy)
 	if err != nil {
 		return gs, errors.Wrapf(err, "error setting Ready, Port and address on GameServer %s Status", gs.ObjectMeta.Name)
 	}
@@ -724,13 +801,13 @@ func (c *Controller) syncGameServerRequestReadyState(gs *v1alpha1.GameServer) (*
 	if addressPopulated {
 		c.recorder.Event(gs, corev1.EventTypeNormal, string(gs.Status.State), "Address and port populated")
 	}
-	c.recorder.Event(gs, corev1.EventTypeNormal, string(gs.Status.State), "SDK.Ready() executed")
+	c.recorder.Event(gs, corev1.EventTypeNormal, string(gs.Status.State), "SDK.Ready() complete")
 	return gs, nil
 }
 
 // syncGameServerShutdownState deletes the GameServer (and therefore the backing Pod) if it is in shutdown state
-func (c *Controller) syncGameServerShutdownState(gs *v1alpha1.GameServer) error {
-	if !(gs.Status.State == v1alpha1.GameServerStateShutdown && gs.ObjectMeta.DeletionTimestamp.IsZero()) {
+func (c *Controller) syncGameServerShutdownState(gs *agonesv1.GameServer) error {
+	if !(gs.Status.State == agonesv1.GameServerStateShutdown && gs.ObjectMeta.DeletionTimestamp.IsZero()) {
 		return nil
 	}
 
@@ -746,9 +823,9 @@ func (c *Controller) syncGameServerShutdownState(gs *v1alpha1.GameServer) error 
 }
 
 // moveToErrorState moves the GameServer to the error state
-func (c *Controller) moveToErrorState(gs *v1alpha1.GameServer, msg string) (*v1alpha1.GameServer, error) {
+func (c *Controller) moveToErrorState(gs *agonesv1.GameServer, msg string) (*agonesv1.GameServer, error) {
 	copy := gs.DeepCopy()
-	copy.Status.State = v1alpha1.GameServerStateError
+	copy.Status.State = agonesv1.GameServerStateError
 
 	gs, err := c.gameServerGetter.GameServers(gs.ObjectMeta.Namespace).Update(copy)
 	if err != nil {
@@ -761,7 +838,7 @@ func (c *Controller) moveToErrorState(gs *v1alpha1.GameServer, msg string) (*v1a
 
 // gameServerPod returns the Pod for this Game Server, or an error if there are none,
 // or it cannot be determined (there are more than one, which should not happen)
-func (c *Controller) gameServerPod(gs *v1alpha1.GameServer) (*corev1.Pod, error) {
+func (c *Controller) gameServerPod(gs *agonesv1.GameServer) (*corev1.Pod, error) {
 	// If the game server is a dev server we do not create a pod for it, return an empty pod.
 	if _, isDev := gs.GetDevAddress(); isDev {
 		return &corev1.Pod{}, nil
@@ -785,14 +862,14 @@ func (c *Controller) gameServerPod(gs *v1alpha1.GameServer) (*corev1.Pod, error)
 // This should be the externalIP, but if the externalIP is
 // not set, it will fall back to the internalIP with a warning.
 // (basically because minikube only has an internalIP)
-func (c *Controller) address(gs *v1alpha1.GameServer, pod *corev1.Pod) (string, error) {
+func (c *Controller) address(gs *agonesv1.GameServer, pod *corev1.Pod) (string, error) {
 	node, err := c.nodeLister.Get(pod.Spec.NodeName)
 	if err != nil {
 		return "", errors.Wrapf(err, "error retrieving node %s for Pod %s", pod.Spec.NodeName, pod.ObjectMeta.Name)
 	}
 
 	for _, a := range node.Status.Addresses {
-		if a.Type == corev1.NodeExternalIP {
+		if a.Type == corev1.NodeExternalIP && net.ParseIP(a.Address) != nil {
 			return a.Address, nil
 		}
 	}
@@ -800,7 +877,7 @@ func (c *Controller) address(gs *v1alpha1.GameServer, pod *corev1.Pod) (string, 
 	// minikube only has an InternalIP on a Node, so we'll fall back to that.
 	c.loggerForGameServer(gs).WithField("node", node.ObjectMeta.Name).Warn("Could not find ExternalIP. Falling back to Internal")
 	for _, a := range node.Status.Addresses {
-		if a.Type == corev1.NodeInternalIP {
+		if a.Type == corev1.NodeInternalIP && net.ParseIP(a.Address) != nil {
 			return a.Address, nil
 		}
 	}
@@ -810,7 +887,7 @@ func (c *Controller) address(gs *v1alpha1.GameServer, pod *corev1.Pod) (string, 
 
 // isGameServerPod returns if this Pod is a Pod that comes from a GameServer
 func isGameServerPod(pod *corev1.Pod) bool {
-	if v1alpha1.GameServerRolePodSelector.Matches(labels.Set(pod.ObjectMeta.Labels)) {
+	if agonesv1.GameServerRolePodSelector.Matches(labels.Set(pod.ObjectMeta.Labels)) {
 		owner := metav1.GetControllerOf(pod)
 		return owner != nil && owner.Kind == "GameServer"
 	}

@@ -1,4 +1,4 @@
-# Copyright 2019 Google Inc. All Rights Reserved.
+# Copyright 2019 Google LLC All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,14 +22,19 @@
 
 build_sdk_base_version = $(call sha,$(build_path)/build-sdk-images/tool/base/Dockerfile)
 build_sdk_base_tag = agones-build-sdk-base:$(build_sdk_base_version)
+
+# Calculate sha hash of sha hashes of all files in a specified SDK_FOLDER
+build_sdk_version = $(call sha_dir,$(build_path)/build-sdk-images/$(SDK_FOLDER)/*)
 build_sdk_base_remote_tag = $(REGISTRY)/$(build_sdk_base_tag)
 build_sdk_prefix = agones-build-sdk-
 grpc_release_tag = v1.16.1
 sdk_build_folder = build-sdk-images/
+examples_folder = ../examples/
 SDK_FOLDER ?= go
 COMMAND ?= gen
+SDK_IMAGE_TAG=$(build_sdk_prefix)$(SDK_FOLDER):$(build_sdk_version)
 
-.PHONY: test-sdks test-sdk build-sdks build-sdk gen-all-sdk-grpc gen-sdk-grpc run-all-sdk-command run-sdk-command 
+.PHONY: test-sdks test-sdk build-sdks build-sdk gen-all-sdk-grpc gen-sdk-grpc run-all-sdk-command run-sdk-command build-example
 
 # Tests all the sdks
 test-sdks: COMMAND := test
@@ -56,7 +61,7 @@ gen-sdk-grpc: COMMAND := gen
 gen-sdk-grpc: run-sdk-command
 
 # Runs a command on all supported languages, use COMMAND variable to select which command.
-run-all-sdk-command: run-sdk-command-go run-sdk-command-rust run-sdk-command-cpp run-sdk-command-node
+run-all-sdk-command: run-sdk-command-go run-sdk-command-rust run-sdk-command-cpp run-sdk-command-node run-sdk-command-restapi
 
 run-sdk-command-node:
 	$(MAKE) run-sdk-command COMMAND=$(COMMAND) SDK_FOLDER=node
@@ -70,6 +75,10 @@ run-sdk-command-rust:
 run-sdk-command-go:
 	$(MAKE) run-sdk-command COMMAND=$(COMMAND) SDK_FOLDER=go
 
+run-sdk-command-restapi:
+	$(MAKE) run-sdk-command COMMAND=$(COMMAND) SDK_FOLDER=restapi
+
+
 # Runs a command for a specific SDK if it exists.
 run-sdk-command:
 	cd $(sdk_build_folder); \
@@ -77,7 +86,7 @@ run-sdk-command:
 		cd - ; \
 		$(MAKE) ensure-build-sdk-image SDK_FOLDER=$(SDK_FOLDER) ; \
 		docker run --rm $(common_mounts) -e "VERSION=$(VERSION)" \
-			$(DOCKER_RUN_ARGS) $(build_sdk_prefix)$(SDK_FOLDER):$(build_version) $(COMMAND) ; \
+			$(DOCKER_RUN_ARGS) $(SDK_IMAGE_TAG) $(COMMAND) ; \
 	else \
 		echo "Command $(COMMAND) not found - nothing to execute" ; \
 	fi
@@ -90,7 +99,7 @@ build-build-sdk-image-base:
 # Builds the docker image used by commands for a specific sdk
 build-build-sdk-image: DOCKER_BUILD_ARGS= --build-arg BASE_IMAGE=$(build_sdk_base_tag)
 build-build-sdk-image: ensure-build-sdk-image-base
-		docker build --tag=$(build_sdk_prefix)$(SDK_FOLDER):$(build_version) $(build_path)build-sdk-images/$(SDK_FOLDER) $(DOCKER_BUILD_ARGS)
+		docker build --tag=$(SDK_IMAGE_TAG) $(build_path)build-sdk-images/$(SDK_FOLDER) $(DOCKER_BUILD_ARGS)
 
 # attempt to pull the image, if it exists and rename it to the local tag
 # exit's clean if it doesn't exist, so can be used on CI
@@ -107,4 +116,83 @@ ensure-build-sdk-image-base:
 
 # create the build image sdk if it doesn't exist
 ensure-build-sdk-image:
-	$(MAKE) build-build-sdk-image SDK_FOLDER=$(SDK_FOLDER)
+	$(MAKE) ensure-image IMAGE_TAG=$(SDK_IMAGE_TAG) BUILD_TARGET=build-build-sdk-image SDK_FOLDER=$(SDK_FOLDER)
+
+# Run SDK conformance Sidecar server in docker in order to run
+# SDK client test against it. Useful for test development
+run-sdk-conformance-local: TIMEOUT ?= 30
+run-sdk-conformance-local: TESTS ?= ready,allocate,setlabel,setannotation,gameserver,health,shutdown,watch,reserve
+run-sdk-conformance-local: ensure-agones-sdk-image
+	docker run -e "ADDRESS=" -p 59357:59357 -p 59358:59358 \
+	 -e "TEST=$(TESTS)" -e "TIMEOUT=$(TIMEOUT)" $(sidecar_tag)
+
+# Run SDK conformance test, previously built, for a specific SDK_FOLDER
+# Sleeps the start of the sidecar to test that the SDK blocks on connection correctly
+run-sdk-conformance-no-build: TIMEOUT ?= 30
+run-sdk-conformance-no-build: RANDOM := $(shell bash -c 'echo $$RANDOM')
+run-sdk-conformance-no-build: DELAY ?= $(shell bash -c "echo $$[ ($(RANDOM) % 5 ) + 1 ]")
+run-sdk-conformance-no-build: TESTS ?= ready,allocate,setlabel,setannotation,gameserver,health,shutdown,watch,reserve
+run-sdk-conformance-no-build: GRPC_PORT ?= 59357
+run-sdk-conformance-no-build: HTTP_PORT ?= 59358
+run-sdk-conformance-no-build: ensure-agones-sdk-image
+run-sdk-conformance-no-build: ensure-build-sdk-image
+	DOCKER_RUN_ARGS="--net host -e AGONES_SDK_GRPC_PORT=$(GRPC_PORT) -e AGONES_SDK_HTTP_PORT=$(HTTP_PORT) $(DOCKER_RUN_ARGS)" COMMAND=sdktest $(MAKE) run-sdk-command & \
+	docker run -p $(GRPC_PORT):$(GRPC_PORT) -p $(HTTP_PORT):$(HTTP_PORT) -e "ADDRESS=" -e "TEST=$(TESTS)" -e "TIMEOUT=$(TIMEOUT)" -e "DELAY=$(DELAY)" \
+	--net=host $(sidecar_tag) --grpc-port $(GRPC_PORT) --http-port $(HTTP_PORT)
+
+# Run SDK conformance test for a specific SDK_FOLDER
+run-sdk-conformance-test: ensure-agones-sdk-image
+run-sdk-conformance-test: ensure-build-sdk-image
+	$(MAKE) run-sdk-command COMMAND=build-sdk-test
+	$(MAKE) run-sdk-conformance-no-build
+
+run-sdk-conformance-test-node:
+	$(MAKE) run-sdk-conformance-test SDK_FOLDER=node GRPC_PORT=9002 HTTP_PORT=9102
+
+run-sdk-conformance-test-go:
+	$(MAKE) run-sdk-conformance-test SDK_FOLDER=go   GRPC_PORT=9001 HTTP_PORT=9101
+
+run-sdk-conformance-test-rust:
+	$(MAKE) run-sdk-conformance-test SDK_FOLDER=rust
+
+run-sdk-conformance-test-rest:
+	$(MAKE) run-sdk-conformance-test SDK_FOLDER=restapi HTTP_PORT=9050
+	$(MAKE) run-sdk-command COMMAND=clean SDK_FOLDER=restapi
+
+# Run a conformance test for all SDKs supported
+run-sdk-conformance-tests: run-sdk-conformance-test-node run-sdk-conformance-test-go run-sdk-conformance-test-rust run-sdk-conformance-test-rest
+
+# Clean package directories and binary files left
+# after building conformance tests for all SDKs supported
+clean-sdk-conformance-tests:
+	$(MAKE) run-all-sdk-command COMMAND=clean
+
+# Perform make build for all examples
+build-examples: build-example-xonotic build-example-cpp-simple build-example-simple-udp build-example-autoscaler-webhook build-example-nodejs-simple
+
+# Run "make build" command for one example directory
+build-example:
+	cd  $(examples_folder)/$(EXAMPLE); \
+	if [ -f Makefile ] ; then \
+		make build; \
+	else \
+		echo "Makefile was not found in "/examples/$(EXAMPLE)" directory - nothing to execute" ; \
+	fi
+
+build-example-xonotic:
+	$(MAKE) build-example EXAMPLE=xonotic
+
+build-example-cpp-simple:
+	$(MAKE) build-example EXAMPLE=cpp-simple
+
+build-example-simple-udp:
+	$(MAKE) build-example EXAMPLE=simple-udp
+
+build-example-rust-simple:
+	$(MAKE) build-example EXAMPLE=rust-simple
+
+build-example-autoscaler-webhook:
+	$(MAKE) build-example EXAMPLE=autoscaler-webhook
+
+build-example-nodejs-simple:
+	$(MAKE) build-example EXAMPLE=nodejs-simple

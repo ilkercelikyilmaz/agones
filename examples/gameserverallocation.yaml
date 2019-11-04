@@ -13,14 +13,12 @@
 # limitations under the License.
 
 #
-# (GameServerAllocation is currently experimental, and likely to change in upcoming releases)
-#
 # Full example of a GameServerAllocation. This is used to allocate
 # A GameServer out of a set of GameServers. This could be a Fleet,
 # multiple Fleets, or a self managed group of GameServers.
 #
 
-apiVersion: "allocation.agones.dev/v1alpha1"
+apiVersion: "allocation.agones.dev/v1"
 kind: GameServerAllocation
 spec:
   # GameServer selector from which to choose GameServers from.
@@ -40,9 +38,9 @@ spec:
   # This also support `matchExpressions`
   preferred:
     - matchLabels:
-        stable.agones.dev/fleet: green-fleet
+        agones.dev/fleet: green-fleet
     - matchLabels:
-        stable.agones.dev/fleet: blue-fleet
+        agones.dev/fleet: blue-fleet
   # defines how GameServers are organised across the cluster.
   # Options include:
   # "Packed" (default) is aimed at dynamic Kubernetes clusters, such as cloud providers, wherein we want to bin pack

@@ -13,6 +13,7 @@ The client SDKs are required for a game server to work with Agones.
 The current supported SDKs are:
 
 - [Unreal Engine]({{< relref "unreal.md" >}})
+- [Unity]({{< relref "unity.md" >}})
 - [C++]({{< relref "cpp.md" >}})
 - [Node.js]({{< relref "nodejs.md" >}})
 - [Go]({{< relref "go.md" >}})
@@ -31,6 +32,22 @@ This means that more languages can be supported in the future with minimal effor
 There is also [local development tooling]({{< relref "local.md" >}}) for working against the SDK locally,
 without having to spin up an entire Kubernetes infrastructure.
 
+## Connecting to the SDK Server
+
+Starting with Agones 1.1.0, the port that the SDK Server listens on for incoming gRPC or HTTP requests is
+configurable. This provides flexibility in cases where the default port conflicts with a port that is needed
+by the game server.
+
+Agones will automatically set the following environment variables on all game server containers:
+
+* `AGONES_SDK_GRPC_PORT`: The port where the gRPC server is listening
+* `AGONES_SDK_HTTP_PORT`: The port where the grpc-gateway is listening
+
+The SDKs will automatically discover and connect to the gRPC port specified in the environment variable.
+
+If your game server requires using a REST client, it is advised to use the port from the environment variable,
+otherwise your game server will not be able to contact the SDK server if it is configured to use a non-default port.
+
 ## Function Reference
 
 While each of the SDKs are canonical to their languages, they all have the following
@@ -44,6 +61,10 @@ This tells Agones that the Game Server is ready to take player connections.
 Once a Game Server has specified that it is `Ready`, then the Kubernetes
 GameServer record will be moved to the `Ready` state, and the details
 for its public address and connection port will be populated.
+
+While Agones prefers that `Shutdown()` is run once a game has completed to delete the `GameServer` instance,
+if you want or need to move an `Allocated` `GameServer` back to `Ready` to be reused, you can call this SDK method again to do
+this.
 
 ### Health()
 This sends a single ping to designate that the Game Server is alive and
@@ -61,16 +82,18 @@ backing Pod will be deleted, if they have not shut themselves down already.
 ### SetLabel(key, value)
 
 This will set a [Label](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/) value on the backing `GameServer`
-record that is stored in Kubernetes. To maintain isolation, the `key` value is automatically prefixed with "stable.agones.dev/sdk-"
+record that is stored in Kubernetes. To maintain isolation, the `key` value is automatically prefixed with "agones.dev/sdk-"
 
-> Note: There are limits on the characters that be used for label keys and values. Details are [here](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set).
+{{< alert title="Warning" color="warning">}}
+There are limits on the characters that be used for label keys and values. Details are [here](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set).
+{{< /alert >}}
 
 This can be useful if you want to information from your running game server process to be observable or searchable through the Kubernetes API.  
 
 ### SetAnnotation(key, value)
 
 This will set a [Annotation](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/) value on the backing
-`Gameserver` record that is stored in Kubernetes. To maintain isolation, the `key` value is automatically prefixed with "stable.agones.dev/sdk-"
+`Gameserver` record that is stored in Kubernetes. To maintain isolation, the `key` value is automatically prefixed with "agones.dev/sdk-"
 
 This can be useful if you want to information from your running game server process to be observable through the Kubernetes API.
 
@@ -82,7 +105,7 @@ the GameServer is currently allocated to.
 
 Since the GameServer contains an entire [PodTemplate](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/#pod-templates)
 the returned object is limited to that configuration that was deemed useful. If there are
-areas that you feel are missing, please [file an issue](https://github.com/GoogleCloudPlatform/agones/issues) or pull request.
+areas that you feel are missing, please [file an issue](https://github.com/googleforgames/agones/issues) or pull request.
 
 The easiest way to see what is exposed, is to check the  {{< ghlink href="sdk.proto" >}}`sdk.proto`{{< /ghlink >}},
 specifically at the `message GameServer`.
@@ -97,11 +120,11 @@ This can be useful to track `GameServer > Status > State` changes, `metadata` ch
 
 In combination with this SDK, manipulating [Annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/) and
 [Labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/) can also be a useful way to communicate information through to running game server processes from outside those processes.
-This is especially useful when combined with `FleetAllocation` [applied metadata]({{< ref "/docs/Reference/fleet.md#fleet-allocation-specification" >}}).  
+This is especially useful when combined with `GameServerAllocation` [applied metadata]({{< ref "/docs/Reference/gameserverallocation.md" >}}).
 
 Since the GameServer contains an entire [PodTemplate](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/#pod-templates)
 the returned object is limited to that configuration that was deemed useful. If there are
-areas that you feel are missing, please [file an issue](https://github.com/GoogleCloudPlatform/agones/issues) or pull request.
+areas that you feel are missing, please [file an issue](https://github.com/googleforgames/agones/issues) or pull request.
 
 The easiest way to see what is exposed, is to check the {{< ghlink href="sdk.proto" >}}`sdk.proto`{{< /ghlink >}},
 specifically at the `message GameServer`.
@@ -114,13 +137,31 @@ and the {{< ghlink href="examples" >}}examples{{< /ghlink >}}.
 With some matchmakers and game matching strategies, it can be important for game servers to mark themselves as `Allocated`.
 For those scenarios, this SDK functionality exists. 
 
-> Note: Using a [GameServerAllocation]({{< ref "/docs/Reference/fleet.md#gameserver-allocation-specification" >}}) is preferred in all other scenarios, 
+{{< alert title="Note" color="info">}}
+Using a [GameServerAllocation]({{< ref "/docs/Reference/gameserverallocation.md" >}}) is preferred in all other scenarios, 
 as it gives Agones control over how packed `GameServers` are scheduled within a cluster, whereas with `Allocate()` you
 relinquish control to an external service which likely doesn't have as much information as Agones.
+{{< /alert >}}
+
+### Reserve(seconds)
+
+With some matchmaking scenarios and systems it is important to be able to ensure that a `GameServer` is unable to be deleted,
+but doesn't trigger a FleetAutoscaler scale up. This is where `Reserve(seconds)` is useful.
+
+`Reserve(seconds)` will move the `GameServer` into the Reserved state for the specified number of seconds (0 is forever), and then it will be
+moved back to `Ready` state. While in `Reserved` state, the `GameServer` will not be deleted on scale down or `Fleet` update,
+and also will not be Allocated.
+
+This is often used when a game server process must register itself with an external system, such as a matchmaker,
+that requires it to designate itself as available for a game session for a certain period. Once a game session has started,
+it should call `SDK.Allocate()` to designate that players are currently active on it.
+
+Calling other state changing SDK commands such as `Ready` or `Allocate` will turn off the timer to reset the `GameServer` back
+to the `Ready` state.
 
 ## Writing your own SDK
 
-If there isn't a SDK for the language and platform you are looking for, you have several options:
+If there isn't an SDK for the language and platform you are looking for, you have several options:
 
 ### gRPC Client Generation
 
@@ -135,6 +176,33 @@ the [REST]({{< relref "rest.md" >}}) HTTP+JSON interface. This could be written 
 the {{< ghlink href="sdk.swagger.json" >}}Swagger/OpenAPI Spec{{< /ghlink >}}.
 
 Finally, if you build something that would be usable by the community, please submit a pull request!
+
+## SDK Conformance Test
+
+There is a tool `SDK server Conformance` checker which will run Local SDK server and record all requests your client is performing.
+
+In order to check that SDK is working properly you should write simple SDK test client which would use all methods of your SDK.
+
+Also to test that SDK client is receiving valid Gameserver data, your binary should set the same `Label` value as creation timestamp which you will receive as a result of GameServer() call and `Annotation` value same as gameserver UID received by Watch gameserver callback.
+
+Complete list of endpoints which should be called by your test client is the following:
+```
+ready,allocate,setlabel,setannotation,gameserver,health,shutdown,watch
+```
+
+In order to run this test SDK server locally use:
+```
+SECONDS=30 make run-sdk-conformance-local
+```
+
+Docker container would timeout in 30 seconds and give your the comparison of received requests and expected requests
+
+For instance you could run Go SDK conformance test and see how the process goes: 
+```
+SDK_FOLDER=go make run-sdk-conformance-test
+```
+
+In order to add test client for your SDK, write `sdktest.sh` and `Dockerfile`. Refer to {{< ghlink href="build/build-sdk-images/go" >}}Golang SDK Conformance testing directory structure{{< /ghlink >}}.
 
 ## Building the Tools
 

@@ -18,7 +18,7 @@ import (
 	"strings"
 	"testing"
 
-	"agones.dev/agones/pkg/apis/stable/v1alpha1"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -34,10 +34,10 @@ func TestControllerGameServerCount(t *testing.T) {
 	c := newFakeController()
 	defer c.close()
 
-	gs1 := gameServerWithFleetAndState("test-fleet", v1alpha1.GameServerStateCreating)
+	gs1 := gameServerWithFleetAndState("test-fleet", agonesv1.GameServerStateCreating)
 	c.gsWatch.Add(gs1)
 	gs1 = gs1.DeepCopy()
-	gs1.Status.State = v1alpha1.GameServerStateReady
+	gs1.Status.State = agonesv1.GameServerStateReady
 	c.gsWatch.Modify(gs1)
 
 	c.sync()
@@ -45,87 +45,16 @@ func TestControllerGameServerCount(t *testing.T) {
 	report()
 
 	gs1 = gs1.DeepCopy()
-	gs1.Status.State = v1alpha1.GameServerStateShutdown
+	gs1.Status.State = agonesv1.GameServerStateShutdown
 	c.gsWatch.Modify(gs1)
-	c.gsWatch.Add(gameServerWithFleetAndState("", v1alpha1.GameServerStatePortAllocation))
-	c.gsWatch.Add(gameServerWithFleetAndState("", v1alpha1.GameServerStatePortAllocation))
+	c.gsWatch.Add(gameServerWithFleetAndState("", agonesv1.GameServerStatePortAllocation))
+	c.gsWatch.Add(gameServerWithFleetAndState("", agonesv1.GameServerStatePortAllocation))
 
 	c.sync()
 	c.collect()
 	report()
 
 	assert.Nil(t, testutil.GatherAndCompare(registry, strings.NewReader(gsCountExpected), "agones_gameservers_count"))
-}
-
-func TestControllerFleetAllocationCount(t *testing.T) {
-
-	registry := prometheus.NewRegistry()
-	_, err := RegisterPrometheusExporter(registry)
-	assert.Nil(t, err)
-
-	c := newFakeController()
-	defer c.close()
-
-	fa1 := fleetAllocation("deleted-fleet")
-	c.faWatch.Add(fa1)
-	c.faWatch.Add(fleetAllocation("test-fleet"))
-	c.faWatch.Add(fleetAllocation("test-fleet"))
-	c.faWatch.Add(fleetAllocation("test-fleet2"))
-
-	c.sync()
-	c.collect()
-	report()
-
-	c.faWatch.Delete(fa1)
-	c.faWatch.Add(fleetAllocation("test-fleet"))
-	c.faWatch.Add(fleetAllocation("test-fleet2"))
-
-	c.sync()
-	c.collect()
-	report()
-
-	assert.Nil(t, testutil.GatherAndCompare(registry, strings.NewReader(faCountExpected), "agones_fleet_allocations_count"))
-}
-
-func TestControllerFleetAllocationTotal(t *testing.T) {
-
-	registry := prometheus.NewRegistry()
-	_, err := RegisterPrometheusExporter(registry)
-	assert.Nil(t, err)
-
-	c := newFakeController()
-	defer c.close()
-	c.run(t)
-	// non allocated should not be counted
-	fa1 := fleetAllocation("unallocated")
-	fa1.Status.GameServer = nil
-	c.faWatch.Add(fa1)
-	c.faWatch.Delete(fa1)
-
-	for i := 0; i < 3; i++ {
-		fa := fleetAllocation("test")
-		// only fleet allocation that were not allocated to a gameserver are collected
-		// this way we avoid counting multiple update events.
-		fa.Status.GameServer = nil
-		c.faWatch.Add(fa)
-		faUpdated := fa.DeepCopy()
-		faUpdated.Status.GameServer = gameServerWithFleetAndState("test", v1alpha1.GameServerStateAllocated)
-		c.faWatch.Modify(faUpdated)
-		// make sure we count only one event
-		c.faWatch.Modify(faUpdated)
-	}
-	for i := 0; i < 2; i++ {
-		fa := fleetAllocation("test2")
-		fa.Status.GameServer = nil
-		c.faWatch.Add(fa)
-		faUpdated := fa.DeepCopy()
-		faUpdated.Status.GameServer = gameServerWithFleetAndState("test2", v1alpha1.GameServerStateAllocated)
-		c.faWatch.Modify(faUpdated)
-	}
-	c.sync()
-	report()
-
-	assert.Nil(t, testutil.GatherAndCompare(registry, strings.NewReader(faTotalExpected), "agones_fleet_allocations_total"))
 }
 
 func TestControllerGameServersTotal(t *testing.T) {
@@ -139,18 +68,18 @@ func TestControllerGameServersTotal(t *testing.T) {
 	c.run(t)
 
 	// deleted gs should not be counted
-	gs := gameServerWithFleetAndState("deleted", v1alpha1.GameServerStateCreating)
+	gs := gameServerWithFleetAndState("deleted", agonesv1.GameServerStateCreating)
 	c.gsWatch.Add(gs)
 	c.gsWatch.Delete(gs)
 
-	generateGsEvents(16, v1alpha1.GameServerStateCreating, "test", c.gsWatch)
-	generateGsEvents(15, v1alpha1.GameServerStateScheduled, "test", c.gsWatch)
-	generateGsEvents(10, v1alpha1.GameServerStateStarting, "test", c.gsWatch)
-	generateGsEvents(1, v1alpha1.GameServerStateUnhealthy, "test", c.gsWatch)
-	generateGsEvents(19, v1alpha1.GameServerStateCreating, "", c.gsWatch)
-	generateGsEvents(18, v1alpha1.GameServerStateScheduled, "", c.gsWatch)
-	generateGsEvents(16, v1alpha1.GameServerStateStarting, "", c.gsWatch)
-	generateGsEvents(1, v1alpha1.GameServerStateUnhealthy, "", c.gsWatch)
+	generateGsEvents(16, agonesv1.GameServerStateCreating, "test", c.gsWatch)
+	generateGsEvents(15, agonesv1.GameServerStateScheduled, "test", c.gsWatch)
+	generateGsEvents(10, agonesv1.GameServerStateStarting, "test", c.gsWatch)
+	generateGsEvents(1, agonesv1.GameServerStateUnhealthy, "test", c.gsWatch)
+	generateGsEvents(19, agonesv1.GameServerStateCreating, "", c.gsWatch)
+	generateGsEvents(18, agonesv1.GameServerStateScheduled, "", c.gsWatch)
+	generateGsEvents(16, agonesv1.GameServerStateStarting, "", c.gsWatch)
+	generateGsEvents(1, agonesv1.GameServerStateUnhealthy, "", c.gsWatch)
 
 	c.sync()
 	report()

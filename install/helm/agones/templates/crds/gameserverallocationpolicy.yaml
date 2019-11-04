@@ -28,6 +28,7 @@ metadata:
   name: gameserverallocationpolicies.multicluster.agones.dev
 spec:
   group: multicluster.agones.dev
+  version: v1alpha1
   names:
     kind: GameServerAllocationPolicy
     plural: gameserverallocationpolicies
@@ -53,14 +54,17 @@ spec:
               properties:
                 secretName:
                   type: string
-                allocationEndpoint:
-                  type: string
+                allocationEndpoints:
+                  items:
+                    type: string
+                  type: array
+                  minItems: 1
                 clusterName:
                   type: string
+                namespace:
+                  type: string
               required:
-              - clusterName
-              - allocationEndpoint
-              - secretName
+              - namespace
               type: object
             priority:
               format: int64
@@ -74,7 +78,6 @@ spec:
           - priority
           - weight
           type: object
-  version: v1alpha1
 status:
   acceptedNames:
     kind: ""

@@ -21,23 +21,23 @@ import (
 	"sync"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/client-go/listers/core/v1"
-
-	stablev1alpha1 "agones.dev/agones/pkg/apis/stable/v1alpha1"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
+	autoscalingv1 "agones.dev/agones/pkg/apis/autoscaling/v1"
 	"agones.dev/agones/pkg/client/clientset/versioned"
 	"agones.dev/agones/pkg/client/informers/externalversions"
-	listerv1alpha1 "agones.dev/agones/pkg/client/listers/stable/v1alpha1"
+	listerv1 "agones.dev/agones/pkg/client/listers/agones/v1"
 	"agones.dev/agones/pkg/util/runtime"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -53,13 +53,11 @@ func init() {
 // Controller is a metrics controller collecting Agones state metrics
 type Controller struct {
 	logger           *logrus.Entry
-	gameServerLister listerv1alpha1.GameServerLister
-	faLister         listerv1alpha1.FleetAllocationLister
+	gameServerLister listerv1.GameServerLister
 	nodeLister       v1.NodeLister
 	gameServerSynced cache.InformerSynced
 	fleetSynced      cache.InformerSynced
 	fasSynced        cache.InformerSynced
-	faSynced         cache.InformerSynced
 	nodeSynced       cache.InformerSynced
 	lock             sync.Mutex
 	gsCount          GameServerCount
@@ -73,14 +71,12 @@ func NewController(
 	kubeInformerFactory informers.SharedInformerFactory,
 	agonesInformerFactory externalversions.SharedInformerFactory) *Controller {
 
-	gameServer := agonesInformerFactory.Stable().V1alpha1().GameServers()
+	gameServer := agonesInformerFactory.Agones().V1().GameServers()
 	gsInformer := gameServer.Informer()
 
-	fa := agonesInformerFactory.Stable().V1alpha1().FleetAllocations()
-	faInformer := fa.Informer()
-	fleets := agonesInformerFactory.Stable().V1alpha1().Fleets()
+	fleets := agonesInformerFactory.Agones().V1().Fleets()
 	fInformer := fleets.Informer()
-	fas := agonesInformerFactory.Stable().V1alpha1().FleetAutoscalers()
+	fas := agonesInformerFactory.Autoscaling().V1().FleetAutoscalers()
 	fasInformer := fas.Informer()
 	node := kubeInformerFactory.Core().V1().Nodes()
 	nodeInformer := node.Informer()
@@ -88,11 +84,9 @@ func NewController(
 	c := &Controller{
 		gameServerLister: gameServer.Lister(),
 		nodeLister:       node.Lister(),
-		faLister:         fa.Lister(),
 		gameServerSynced: gsInformer.HasSynced,
 		fleetSynced:      fInformer.HasSynced,
 		fasSynced:        fasInformer.HasSynced,
-		faSynced:         faInformer.HasSynced,
 		nodeSynced:       nodeInformer.HasSynced,
 		gsCount:          GameServerCount{},
 		faCount:          map[string]int64{},
@@ -116,10 +110,6 @@ func NewController(
 		DeleteFunc: c.recordFleetAutoScalerDeletion,
 	})
 
-	faInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
-		UpdateFunc: c.recordFleetAllocationChanges,
-	}, 0)
-
 	gsInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		UpdateFunc: c.recordGameServerStatusChanges,
 	}, 0)
@@ -129,7 +119,7 @@ func NewController(
 
 func (c *Controller) recordFleetAutoScalerChanges(old, new interface{}) {
 
-	fas, ok := new.(*stablev1alpha1.FleetAutoscaler)
+	fas, ok := new.(*autoscalingv1.FleetAutoscaler)
 	if !ok {
 		return
 	}
@@ -137,7 +127,7 @@ func (c *Controller) recordFleetAutoScalerChanges(old, new interface{}) {
 	// we looking for fleet name changes if that happens we need to reset
 	// metrics for the old fas.
 	if old != nil {
-		if oldFas, ok := old.(*stablev1alpha1.FleetAutoscaler); ok &&
+		if oldFas, ok := old.(*autoscalingv1.FleetAutoscaler); ok &&
 			oldFas.Spec.FleetName != fas.Spec.FleetName {
 			c.recordFleetAutoScalerDeletion(old)
 		}
@@ -194,7 +184,7 @@ func (c *Controller) recordFleetAutoScalerChanges(old, new interface{}) {
 }
 
 func (c *Controller) recordFleetAutoScalerDeletion(obj interface{}) {
-	fas, ok := obj.(*stablev1alpha1.FleetAutoscaler)
+	fas, ok := obj.(*autoscalingv1.FleetAutoscaler)
 	if !ok {
 		return
 	}
@@ -210,7 +200,7 @@ func (c *Controller) recordFleetAutoScalerDeletion(obj interface{}) {
 }
 
 func (c *Controller) recordFleetChanges(obj interface{}) {
-	f, ok := obj.(*stablev1alpha1.Fleet)
+	f, ok := obj.(*agonesv1.Fleet)
 	if !ok {
 		return
 	}
@@ -226,7 +216,7 @@ func (c *Controller) recordFleetChanges(obj interface{}) {
 }
 
 func (c *Controller) recordFleetDeletion(obj interface{}) {
-	f, ok := obj.(*stablev1alpha1.Fleet)
+	f, ok := obj.(*agonesv1.Fleet)
 	if !ok {
 		return
 	}
@@ -257,16 +247,16 @@ func (c *Controller) recordFleetReplicas(fleetName string, total, allocated, rea
 // Addition to the cache are not handled, otherwise resync would make metrics inaccurate by doubling
 // current gameservers states.
 func (c *Controller) recordGameServerStatusChanges(old, new interface{}) {
-	newGs, ok := new.(*stablev1alpha1.GameServer)
+	newGs, ok := new.(*agonesv1.GameServer)
 	if !ok {
 		return
 	}
-	oldGs, ok := old.(*stablev1alpha1.GameServer)
+	oldGs, ok := old.(*agonesv1.GameServer)
 	if !ok {
 		return
 	}
 	if newGs.Status.State != oldGs.Status.State {
-		fleetName := newGs.Labels[stablev1alpha1.FleetNameLabel]
+		fleetName := newGs.Labels[agonesv1.FleetNameLabel]
 		if fleetName == "" {
 			fleetName = "none"
 		}
@@ -275,30 +265,11 @@ func (c *Controller) recordGameServerStatusChanges(old, new interface{}) {
 	}
 }
 
-// record fleet allocations total by watching cache changes.
-func (c *Controller) recordFleetAllocationChanges(old, new interface{}) {
-	newFa, ok := new.(*stablev1alpha1.FleetAllocation)
-	if !ok {
-		return
-	}
-	oldFa, ok := old.(*stablev1alpha1.FleetAllocation)
-	if !ok {
-		return
-	}
-	// fleet allocations are added without gameserver allocated
-	// but then get modified on successful allocation with their gameserver
-	if oldFa.Status.GameServer == nil && newFa.Status.GameServer != nil {
-		recordWithTags(context.Background(), []tag.Mutator{tag.Upsert(keyFleetName, newFa.Spec.FleetName)},
-			fleetAllocationTotalStats.M(1))
-	}
-}
-
 // Run the Metrics controller. Will block until stop is closed.
 // Collect metrics via cache changes and parse the cache periodically to record resource counts.
 func (c *Controller) Run(workers int, stop <-chan struct{}) error {
 	c.logger.Info("Wait for cache sync")
-	if !cache.WaitForCacheSync(stop, c.gameServerSynced, c.fleetSynced,
-		c.fasSynced, c.faSynced) {
+	if !cache.WaitForCacheSync(stop, c.gameServerSynced, c.fleetSynced, c.fasSynced) {
 		return errors.New("failed to wait for caches to sync")
 	}
 	wait.Until(c.collect, MetricResyncPeriod, stop)
@@ -311,31 +282,7 @@ func (c *Controller) collect() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.collectGameServerCounts()
-	c.collectFleetAllocationCounts()
 	c.collectNodeCounts()
-}
-
-// collects fleet allocations count by going through our informer cache
-func (c *Controller) collectFleetAllocationCounts() {
-	//reset fleet allocations count per fleet name
-	for fleetName := range c.faCount {
-		c.faCount[fleetName] = 0
-	}
-
-	fleetAllocations, err := c.faLister.List(labels.Everything())
-	if err != nil {
-		c.logger.WithError(err).Warn("failed listing fleet allocations")
-		return
-	}
-
-	for _, fa := range fleetAllocations {
-		c.faCount[fa.Spec.FleetName]++
-	}
-
-	for fleetName, count := range c.faCount {
-		recordWithTags(context.Background(), []tag.Mutator{tag.Insert(keyFleetName, fleetName)},
-			fleetAllocationCountStats.M(count))
-	}
 }
 
 // collects gameservers count by going through our informer cache
@@ -398,10 +345,10 @@ func removeSystemNodes(nodes []*corev1.Node) []*corev1.Node {
 	return result
 }
 
-// isSystemNode determines if a node is a system node, by checking if it has any taints starting with "stable.agones.dev/"
+// isSystemNode determines if a node is a system node, by checking if it has any taints starting with "agones.dev/"
 func isSystemNode(n *corev1.Node) bool {
 	for _, t := range n.Spec.Taints {
-		if strings.HasPrefix(t.Key, "stable.agones.dev/") {
+		if strings.HasPrefix(t.Key, "agones.dev/") {
 			return true
 		}
 	}

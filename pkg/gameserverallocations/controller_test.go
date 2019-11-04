@@ -19,21 +19,26 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 	"time"
 
+	pb "agones.dev/agones/pkg/allocation/go/v1alpha1"
 	"agones.dev/agones/pkg/apis"
-	"agones.dev/agones/pkg/apis/allocation/v1alpha1"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
+	allocationv1 "agones.dev/agones/pkg/apis/allocation/v1"
 	multiclusterv1alpha1 "agones.dev/agones/pkg/apis/multicluster/v1alpha1"
-	stablev1alpha1 "agones.dev/agones/pkg/apis/stable/v1alpha1"
 	"agones.dev/agones/pkg/gameservers"
 	agtesting "agones.dev/agones/pkg/testing"
 	"agones.dev/agones/pkg/util/apiserver"
+	"agones.dev/agones/pkg/util/signals"
 	"github.com/heptiolabs/healthcheck"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -51,41 +56,44 @@ const (
 	n2        = "node2"
 )
 
-func TestControllerAllocationHandler(t *testing.T) {
+func TestControllerAllocator(t *testing.T) {
 	t.Parallel()
+	stop := signals.NewStopChannel()
 
 	t.Run("successful allocation", func(t *testing.T) {
 		f, _, gsList := defaultFixtures(3)
 
-		gsa := &v1alpha1.GameServerAllocation{
-			Spec: v1alpha1.GameServerAllocationSpec{
-				Required: metav1.LabelSelector{MatchLabels: map[string]string{stablev1alpha1.FleetNameLabel: f.ObjectMeta.Name}},
+		gsa := &allocationv1.GameServerAllocation{
+			Spec: allocationv1.GameServerAllocationSpec{
+				Required: metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: f.ObjectMeta.Name}},
 			}}
 
 		c, m := newFakeController()
 		gsWatch := watch.NewFake()
 		m.AgonesClient.AddWatchReactor("gameservers", k8stesting.DefaultWatchReactor(gsWatch, nil))
 		m.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-			return true, &stablev1alpha1.GameServerList{Items: gsList}, nil
+			return true, &agonesv1.GameServerList{Items: gsList}, nil
 		})
 		m.AgonesClient.AddReactor("update", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
 			ua := action.(k8stesting.UpdateAction)
-			gs := ua.GetObject().(*stablev1alpha1.GameServer)
+			gs := ua.GetObject().(*agonesv1.GameServer)
 			gsWatch.Modify(gs)
 			return true, gs, nil
 		})
 
-		stop, cancel := agtesting.StartInformers(m, c.gameServerSynced)
+		stop, cancel := agtesting.StartInformers(m)
 		defer cancel()
 
-		// This call initializes the cache
-		err := c.syncReadyGSServerCache()
-		assert.Nil(t, err)
+		if err := c.Run(1, stop); err != nil {
+			assert.FailNow(t, err.Error())
+		}
+		// wait for it to be up and running
+		err := wait.PollImmediate(time.Second, 10*time.Second, func() (done bool, err error) {
+			return c.allocator.readyGameServerCache.workerqueue.RunCount() == 1, nil
+		})
+		assert.NoError(t, err)
 
-		err = c.counter.Run(0, stop)
-		assert.Nil(t, err)
-
-		test := func(gsa *v1alpha1.GameServerAllocation, expectedState v1alpha1.GameServerAllocationState) {
+		test := func(gsa *allocationv1.GameServerAllocation, expectedState allocationv1.GameServerAllocationState) {
 			buf := bytes.NewBuffer(nil)
 			err := json.NewEncoder(buf).Encode(gsa)
 			assert.NoError(t, err)
@@ -93,9 +101,9 @@ func TestControllerAllocationHandler(t *testing.T) {
 			r.Header.Set("Content-Type", k8sruntime.ContentTypeJSON)
 			assert.NoError(t, err)
 			rec := httptest.NewRecorder()
-			err = c.allocationHandler(rec, r, "default")
+			err = c.processAllocationRequest(rec, r, "default", stop)
 			assert.NoError(t, err)
-			ret := &v1alpha1.GameServerAllocation{}
+			ret := &allocationv1.GameServerAllocation{}
 			err = json.Unmarshal(rec.Body.Bytes(), ret)
 			assert.NoError(t, err)
 
@@ -103,10 +111,10 @@ func TestControllerAllocationHandler(t *testing.T) {
 			assert.True(t, expectedState == ret.Status.State, "Failed: %s vs %s", expectedState, ret.Status.State)
 		}
 
-		test(gsa.DeepCopy(), v1alpha1.GameServerAllocationAllocated)
-		test(gsa.DeepCopy(), v1alpha1.GameServerAllocationAllocated)
-		test(gsa.DeepCopy(), v1alpha1.GameServerAllocationAllocated)
-		test(gsa.DeepCopy(), v1alpha1.GameServerAllocationUnAllocated)
+		test(gsa.DeepCopy(), allocationv1.GameServerAllocationAllocated)
+		test(gsa.DeepCopy(), allocationv1.GameServerAllocationAllocated)
+		test(gsa.DeepCopy(), allocationv1.GameServerAllocationAllocated)
+		test(gsa.DeepCopy(), allocationv1.GameServerAllocationUnAllocated)
 	})
 
 	t.Run("method not allowed", func(t *testing.T) {
@@ -115,7 +123,7 @@ func TestControllerAllocationHandler(t *testing.T) {
 		rec := httptest.NewRecorder()
 		assert.NoError(t, err)
 
-		err = c.allocationHandler(rec, r, "default")
+		err = c.processAllocationRequest(rec, r, "default", stop)
 		assert.NoError(t, err)
 
 		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
@@ -123,8 +131,8 @@ func TestControllerAllocationHandler(t *testing.T) {
 
 	t.Run("invalid gameserverallocation", func(t *testing.T) {
 		c, _ := newFakeController()
-		gsa := &v1alpha1.GameServerAllocation{
-			Spec: v1alpha1.GameServerAllocationSpec{
+		gsa := &allocationv1.GameServerAllocation{
+			Spec: allocationv1.GameServerAllocationSpec{
 				Scheduling: "wrong",
 			}}
 		buf := bytes.NewBuffer(nil)
@@ -134,7 +142,7 @@ func TestControllerAllocationHandler(t *testing.T) {
 		r.Header.Set("Content-Type", k8sruntime.ContentTypeJSON)
 		assert.NoError(t, err)
 		rec := httptest.NewRecorder()
-		err = c.allocationHandler(rec, r, "default")
+		err = c.processAllocationRequest(rec, r, "default", stop)
 		assert.NoError(t, err)
 
 		assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
@@ -155,12 +163,12 @@ func TestControllerAllocate(t *testing.T) {
 	n := metav1.Now()
 	l := map[string]string{"mode": "deathmatch"}
 	a := map[string]string{"map": "searide"}
-	fam := v1alpha1.MetaPatch{Labels: l, Annotations: a}
+	fam := allocationv1.MetaPatch{Labels: l, Annotations: a}
 
 	gsList[3].ObjectMeta.DeletionTimestamp = &n
 
 	m.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-		return true, &stablev1alpha1.GameServerList{Items: gsList}, nil
+		return true, &agonesv1.GameServerList{Items: gsList}, nil
 	})
 
 	updated := false
@@ -168,35 +176,37 @@ func TestControllerAllocate(t *testing.T) {
 	m.AgonesClient.AddWatchReactor("gameservers", k8stesting.DefaultWatchReactor(gsWatch, nil))
 	m.AgonesClient.AddReactor("update", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
 		ua := action.(k8stesting.UpdateAction)
-		gs := ua.GetObject().(*stablev1alpha1.GameServer)
+		gs := ua.GetObject().(*agonesv1.GameServer)
 
 		updated = true
-		assert.Equal(t, stablev1alpha1.GameServerStateAllocated, gs.Status.State)
+		assert.Equal(t, agonesv1.GameServerStateAllocated, gs.Status.State)
 		gsWatch.Modify(gs)
 
 		return true, gs, nil
 	})
 
-	stop, cancel := agtesting.StartInformers(m, m.AgonesInformerFactory.Stable().V1alpha1().GameServers().Informer().HasSynced)
+	stop, cancel := agtesting.StartInformers(m)
 	defer cancel()
 
-	// This call initializes the cache
-	err := c.syncReadyGSServerCache()
-	assert.Nil(t, err)
+	if err := c.Run(1, stop); err != nil {
+		assert.FailNow(t, err.Error())
+	}
+	// wait for it to be up and running
+	err := wait.PollImmediate(time.Second, 10*time.Second, func() (done bool, err error) {
+		return c.allocator.readyGameServerCache.workerqueue.RunCount() == 1, nil
+	})
+	assert.NoError(t, err)
 
-	err = c.counter.Run(0, stop)
-	assert.Nil(t, err)
-
-	gsa := v1alpha1.GameServerAllocation{ObjectMeta: metav1.ObjectMeta{Name: "gsa-1"},
-		Spec: v1alpha1.GameServerAllocationSpec{
-			Required:  metav1.LabelSelector{MatchLabels: map[string]string{stablev1alpha1.FleetNameLabel: f.ObjectMeta.Name}},
+	gsa := allocationv1.GameServerAllocation{ObjectMeta: metav1.ObjectMeta{Name: "gsa-1", Namespace: defaultNs},
+		Spec: allocationv1.GameServerAllocationSpec{
+			Required:  metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: f.ObjectMeta.Name}},
 			MetaPatch: fam,
 		}}
 	gsa.ApplyDefaults()
 
-	gs, err := c.allocate(&gsa)
+	gs, err := c.allocator.allocate(&gsa, stop)
 	assert.Nil(t, err)
-	assert.Equal(t, stablev1alpha1.GameServerStateAllocated, gs.Status.State)
+	assert.Equal(t, agonesv1.GameServerStateAllocated, gs.Status.State)
 	assert.True(t, updated)
 	for key, value := range fam.Labels {
 		v, ok := gs.ObjectMeta.Labels[key]
@@ -210,19 +220,19 @@ func TestControllerAllocate(t *testing.T) {
 	}
 
 	updated = false
-	gs, err = c.allocate(&gsa)
+	gs, err = c.allocator.allocate(&gsa, stop)
 	assert.Nil(t, err)
-	assert.Equal(t, stablev1alpha1.GameServerStateAllocated, gs.Status.State)
+	assert.Equal(t, agonesv1.GameServerStateAllocated, gs.Status.State)
 	assert.True(t, updated)
 
 	updated = false
-	gs, err = c.allocate(&gsa)
+	gs, err = c.allocator.allocate(&gsa, stop)
 	assert.Nil(t, err)
-	assert.Equal(t, stablev1alpha1.GameServerStateAllocated, gs.Status.State)
+	assert.Equal(t, agonesv1.GameServerStateAllocated, gs.Status.State)
 	assert.True(t, updated)
 
 	updated = false
-	_, err = c.allocate(&gsa)
+	_, err = c.allocator.allocate(&gsa, stop)
 	assert.NotNil(t, err)
 	assert.Equal(t, ErrNoGameServerReady, err)
 	assert.False(t, updated)
@@ -230,8 +240,9 @@ func TestControllerAllocate(t *testing.T) {
 
 func TestControllerAllocatePriority(t *testing.T) {
 	t.Parallel()
+	stop := signals.NewStopChannel()
 
-	run := func(t *testing.T, name string, test func(t *testing.T, c *Controller, gas *v1alpha1.GameServerAllocation)) {
+	run := func(t *testing.T, name string, test func(t *testing.T, c *Controller, gas *allocationv1.GameServerAllocation)) {
 		f, _, gsList := defaultFixtures(4)
 		c, m := newFakeController()
 
@@ -241,32 +252,34 @@ func TestControllerAllocatePriority(t *testing.T) {
 		gsList[3].Status.NodeName = n1
 
 		m.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-			return true, &stablev1alpha1.GameServerList{Items: gsList}, nil
+			return true, &agonesv1.GameServerList{Items: gsList}, nil
 		})
 
 		gsWatch := watch.NewFake()
 		m.AgonesClient.AddWatchReactor("gameservers", k8stesting.DefaultWatchReactor(gsWatch, nil))
 		m.AgonesClient.AddReactor("update", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
 			ua := action.(k8stesting.UpdateAction)
-			gs := ua.GetObject().(*stablev1alpha1.GameServer)
+			gs := ua.GetObject().(*agonesv1.GameServer)
 			gsWatch.Modify(gs)
 
 			return true, gs, nil
 		})
 
-		stop, cancel := agtesting.StartInformers(m, c.gameServerSynced)
+		stop, cancel := agtesting.StartInformers(m)
 		defer cancel()
 
-		// This call initializes the cache
-		err := c.syncReadyGSServerCache()
-		assert.Nil(t, err)
+		if err := c.Run(1, stop); err != nil {
+			assert.FailNow(t, err.Error())
+		}
+		// wait for it to be up and running
+		err := wait.PollImmediate(time.Second, 10*time.Second, func() (done bool, err error) {
+			return c.allocator.readyGameServerCache.workerqueue.RunCount() == 1, nil
+		})
+		assert.NoError(t, err)
 
-		err = c.counter.Run(0, stop)
-		assert.Nil(t, err)
-
-		gas := &v1alpha1.GameServerAllocation{ObjectMeta: metav1.ObjectMeta{Name: "fa-1"},
-			Spec: v1alpha1.GameServerAllocationSpec{
-				Required: metav1.LabelSelector{MatchLabels: map[string]string{stablev1alpha1.FleetNameLabel: f.ObjectMeta.Name}},
+		gas := &allocationv1.GameServerAllocation{ObjectMeta: metav1.ObjectMeta{Name: "fa-1", Namespace: defaultNs},
+			Spec: allocationv1.GameServerAllocationSpec{
+				Required: metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: f.ObjectMeta.Name}},
 			}}
 		gas.ApplyDefaults()
 
@@ -275,358 +288,180 @@ func TestControllerAllocatePriority(t *testing.T) {
 		})
 	}
 
-	run(t, "packed", func(t *testing.T, c *Controller, gas *v1alpha1.GameServerAllocation) {
+	run(t, "packed", func(t *testing.T, c *Controller, gas *allocationv1.GameServerAllocation) {
 		// priority should be node1, then node2
-		gs, err := c.allocate(gas)
-		assert.Nil(t, err)
-		assert.Equal(t, n1, gs.Status.NodeName)
+		gs1, err := c.allocator.allocate(gas, stop)
+		assert.NoError(t, err)
+		assert.Equal(t, n1, gs1.Status.NodeName)
 
-		gs, err = c.allocate(gas)
-		assert.Nil(t, err)
-		assert.Equal(t, n1, gs.Status.NodeName)
+		gs2, err := c.allocator.allocate(gas, stop)
+		assert.NoError(t, err)
+		assert.Equal(t, n1, gs2.Status.NodeName)
+		assert.NotEqual(t, gs1.ObjectMeta.Name, gs2.ObjectMeta.Name)
 
-		gs, err = c.allocate(gas)
-		assert.Nil(t, err)
-		assert.Equal(t, n1, gs.Status.NodeName)
+		gs3, err := c.allocator.allocate(gas, stop)
+		assert.NoError(t, err)
+		assert.Equal(t, n1, gs3.Status.NodeName)
+		assert.NotContains(t, []string{gs1.ObjectMeta.Name, gs2.ObjectMeta.Name}, gs3.ObjectMeta.Name)
 
-		gs, err = c.allocate(gas)
-		assert.Nil(t, err)
-		assert.Equal(t, n2, gs.Status.NodeName)
+		gs4, err := c.allocator.allocate(gas, stop)
+		assert.NoError(t, err)
+		assert.Equal(t, n2, gs4.Status.NodeName)
+		assert.NotContains(t, []string{gs1.ObjectMeta.Name, gs2.ObjectMeta.Name, gs3.ObjectMeta.Name}, gs4.ObjectMeta.Name)
 
 		// should have none left
-		_, err = c.allocate(gas)
-		assert.NotNil(t, err)
+		_, err = c.allocator.allocate(gas, stop)
+		assert.Equal(t, err, ErrNoGameServerReady)
 	})
 
-	run(t, "distributed", func(t *testing.T, c *Controller, gas *v1alpha1.GameServerAllocation) {
+	run(t, "distributed", func(t *testing.T, c *Controller, gas *allocationv1.GameServerAllocation) {
 		// make a copy, to avoid the race check
 		gas = gas.DeepCopy()
 		gas.Spec.Scheduling = apis.Distributed
-		// should go node2, then node1
-		gs, err := c.allocate(gas)
-		assert.Nil(t, err)
-		assert.Equal(t, n2, gs.Status.NodeName)
 
-		gs, err = c.allocate(gas)
-		assert.Nil(t, err)
-		assert.Equal(t, n1, gs.Status.NodeName)
+		// distributed is randomised, so no set pattern
 
-		gs, err = c.allocate(gas)
-		assert.Nil(t, err)
-		assert.Equal(t, n1, gs.Status.NodeName)
+		gs1, err := c.allocator.allocate(gas, stop)
+		assert.NoError(t, err)
 
-		gs, err = c.allocate(gas)
-		assert.Nil(t, err)
-		assert.Equal(t, n1, gs.Status.NodeName)
+		gs2, err := c.allocator.allocate(gas, stop)
+		assert.NoError(t, err)
+		assert.NotEqual(t, gs1.ObjectMeta.Name, gs2.ObjectMeta.Name)
+
+		gs3, err := c.allocator.allocate(gas, stop)
+		assert.NoError(t, err)
+		assert.NotContains(t, []string{gs1.ObjectMeta.Name, gs2.ObjectMeta.Name}, gs3.ObjectMeta.Name)
+
+		gs4, err := c.allocator.allocate(gas, stop)
+		assert.NoError(t, err)
+		assert.NotContains(t, []string{gs1.ObjectMeta.Name, gs2.ObjectMeta.Name, gs3.ObjectMeta.Name}, gs4.ObjectMeta.Name)
 
 		// should have none left
-		_, err = c.allocate(gas)
-		assert.NotNil(t, err)
+		_, err = c.allocator.allocate(gas, stop)
+		assert.Equal(t, err, ErrNoGameServerReady)
 	})
 }
 
-func TestControllerFindPackedReadyGameServer(t *testing.T) {
+func TestControllerRunLocalAllocations(t *testing.T) {
 	t.Parallel()
 
-	labels := map[string]string{"role": "gameserver"}
-	gsa := &v1alpha1.GameServerAllocation{
-		Spec: v1alpha1.GameServerAllocationSpec{
-			Required: metav1.LabelSelector{
-				MatchLabels: labels,
+	t.Run("no problems", func(t *testing.T) {
+		f, _, gsList := defaultFixtures(5)
+		gsList[0].Status.NodeName = "special"
+
+		c, m := newFakeController()
+		m.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+			return true, &agonesv1.GameServerList{Items: gsList}, nil
+		})
+		updateCount := 0
+		m.AgonesClient.AddReactor("update", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+			updateCount++
+
+			uo := action.(k8stesting.UpdateAction)
+			gs := uo.GetObject().(*agonesv1.GameServer)
+
+			return true, gs, nil
+		})
+
+		stop, cancel := agtesting.StartInformers(m, c.allocator.readyGameServerCache.gameServerSynced)
+		defer cancel()
+
+		// This call initializes the cache
+		err := c.allocator.readyGameServerCache.syncReadyGSServerCache()
+		assert.Nil(t, err)
+
+		err = c.allocator.readyGameServerCache.counter.Run(0, stop)
+		assert.Nil(t, err)
+
+		gsa := &allocationv1.GameServerAllocation{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: defaultNs,
 			},
-			Scheduling: "",
-		},
-	}
+			Spec: allocationv1.GameServerAllocationSpec{
+				Required: metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: f.ObjectMeta.Name}},
+			}}
+		gsa.ApplyDefaults()
 
-	t.Run("test just required", func(t *testing.T) {
+		// line up 3 in a batch
+		j1 := request{gsa: gsa.DeepCopy(), response: make(chan response)}
+		c.allocator.pendingRequests <- j1
+		j2 := request{gsa: gsa.DeepCopy(), response: make(chan response)}
+		c.allocator.pendingRequests <- j2
+		j3 := request{gsa: gsa.DeepCopy(), response: make(chan response)}
+		c.allocator.pendingRequests <- j3
+
+		go c.allocator.ListenAndAllocate(3, stop)
+
+		res1 := <-j1.response
+		assert.NoError(t, res1.err)
+		assert.NotNil(t, res1.gs)
+
+		// since we gave gsList[0] a different nodename, it should always come first
+		assert.Contains(t, []string{"gs2", "gs3", "gs4", "gs5"}, res1.gs.ObjectMeta.Name)
+		assert.Equal(t, agonesv1.GameServerStateAllocated, res1.gs.Status.State)
+
+		res2 := <-j2.response
+		assert.NoError(t, res2.err)
+		assert.NotNil(t, res2.gs)
+		assert.NotEqual(t, res1.gs.ObjectMeta.Name, res2.gs.ObjectMeta.Name)
+		assert.Equal(t, agonesv1.GameServerStateAllocated, res2.gs.Status.State)
+
+		res3 := <-j3.response
+		assert.NoError(t, res3.err)
+		assert.NotNil(t, res3.gs)
+		assert.Equal(t, agonesv1.GameServerStateAllocated, res3.gs.Status.State)
+		assert.NotEqual(t, res1.gs.ObjectMeta.Name, res3.gs.ObjectMeta.Name)
+		assert.NotEqual(t, res2.gs.ObjectMeta.Name, res3.gs.ObjectMeta.Name)
+
+		assert.Equal(t, 3, updateCount)
+	})
+
+	t.Run("no gameservers", func(t *testing.T) {
 		c, m := newFakeController()
-		watch := watch.NewFake()
-		m.AgonesClient.AddWatchReactor("gameservers", k8stesting.DefaultWatchReactor(watch, nil))
-		hasSync := m.AgonesInformerFactory.Stable().V1alpha1().GameServers().Informer().HasSynced
-
-		n := metav1.Now()
-		gsList := []stablev1alpha1.GameServer{
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs6", Namespace: defaultNs, Labels: labels, DeletionTimestamp: &n}, Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs1", Namespace: defaultNs, Labels: labels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs2", Namespace: defaultNs, Labels: labels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node2", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs3", Namespace: defaultNs, Labels: labels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateAllocated}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs4", Namespace: defaultNs, Labels: labels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateAllocated}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs5", Namespace: defaultNs, Labels: labels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateError}},
-		}
-
-		m.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-			return true, &stablev1alpha1.GameServerList{Items: gsList}, nil
-		})
-
-		stop, cancel := agtesting.StartInformers(m, hasSync)
+		stop, cancel := agtesting.StartInformers(m, c.allocator.readyGameServerCache.gameServerSynced)
 		defer cancel()
 
 		// This call initializes the cache
-		err := c.syncReadyGSServerCache()
+		err := c.allocator.readyGameServerCache.syncReadyGSServerCache()
 		assert.Nil(t, err)
 
-		err = c.counter.Run(0, stop)
+		err = c.allocator.readyGameServerCache.counter.Run(0, stop)
 		assert.Nil(t, err)
 
-		gs, err := c.findReadyGameServerForAllocation(gsa, packedComparator)
-		assert.Nil(t, err)
-		assert.Equal(t, "node1", gs.Status.NodeName)
-		assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-
-		// mock that the first game server is allocated
-		change := gsList[1].DeepCopy()
-		change.Status.State = stablev1alpha1.GameServerStateAllocated
-		watch.Modify(change)
-		assert.True(t, cache.WaitForCacheSync(stop, hasSync))
-
-		gs, err = c.findReadyGameServerForAllocation(gsa, packedComparator)
-		assert.Nil(t, err)
-		assert.Equal(t, "node2", gs.Status.NodeName)
-		assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-
-		gsList[2].Status.State = stablev1alpha1.GameServerStateAllocated
-		change = gsList[2].DeepCopy()
-		change.Status.State = stablev1alpha1.GameServerStateAllocated
-		watch.Modify(change)
-		assert.True(t, cache.WaitForCacheSync(stop, hasSync))
-
-		gs, err = c.findReadyGameServerForAllocation(gsa, packedComparator)
-		assert.Equal(t, ErrNoGameServerReady, err)
-		assert.Nil(t, gs)
-	})
-
-	t.Run("test preferred", func(t *testing.T) {
-		c, m := newFakeController()
-		watch := watch.NewFake()
-		m.AgonesClient.AddWatchReactor("gameservers", k8stesting.DefaultWatchReactor(watch, nil))
-		hasSync := m.AgonesInformerFactory.Stable().V1alpha1().GameServers().Informer().HasSynced
-
-		prefLabels := map[string]string{"role": "gameserver", "preferred": "true"}
-		gsList := []stablev1alpha1.GameServer{
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs1", Namespace: defaultNs, Labels: prefLabels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs2", Namespace: defaultNs, Labels: labels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node2", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs3", Namespace: defaultNs, Labels: labels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs4", Namespace: defaultNs, Labels: prefLabels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node2", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs5", Namespace: defaultNs, Labels: labels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs6", Namespace: defaultNs, Labels: labels}, Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateReady}},
-		}
-
-		m.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-			return true, &stablev1alpha1.GameServerList{Items: gsList}, nil
-		})
-
-		prefGsa := gsa.DeepCopy()
-		prefGsa.Spec.Preferred = append(prefGsa.Spec.Preferred, metav1.LabelSelector{
-			MatchLabels: map[string]string{"preferred": "true"},
-		})
-
-		stop, cancel := agtesting.StartInformers(m, hasSync)
-		defer cancel()
-
-		// This call initializes the cache
-		err := c.syncReadyGSServerCache()
-		assert.Nil(t, err)
-
-		err = c.counter.Run(0, stop)
-		assert.Nil(t, err)
-
-		gs, err := c.findReadyGameServerForAllocation(prefGsa, packedComparator)
-		assert.Nil(t, err)
-		assert.Equal(t, "node1", gs.Status.NodeName)
-		assert.Equal(t, "gs1", gs.ObjectMeta.Name)
-		assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-
-		change := gsList[0].DeepCopy()
-		change.Status.State = stablev1alpha1.GameServerStateAllocated
-		watch.Modify(change)
-		assert.True(t, cache.WaitForCacheSync(stop, hasSync))
-
-		gs, err = c.findReadyGameServerForAllocation(prefGsa, packedComparator)
-		assert.Nil(t, err)
-		assert.Equal(t, "node2", gs.Status.NodeName)
-		assert.Equal(t, "gs4", gs.ObjectMeta.Name)
-		assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-
-		change = gsList[3].DeepCopy()
-		change.Status.State = stablev1alpha1.GameServerStateAllocated
-		watch.Modify(change)
-		assert.True(t, cache.WaitForCacheSync(stop, hasSync))
-
-		gs, err = c.findReadyGameServerForAllocation(prefGsa, packedComparator)
-		assert.Nil(t, err)
-		assert.Equal(t, "node1", gs.Status.NodeName)
-		assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-	})
-
-	t.Run("allocation trap", func(t *testing.T) {
-		c, m := newFakeController()
-		hasSync := m.AgonesInformerFactory.Stable().V1alpha1().GameServers().Informer().HasSynced
-
-		gsList := []stablev1alpha1.GameServer{
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs1", Labels: labels},
-				Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateAllocated}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs2", Labels: labels},
-				Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateAllocated}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs3", Labels: labels},
-				Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateAllocated}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs4", Labels: labels},
-				Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateAllocated}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs5", Labels: labels},
-				Status: stablev1alpha1.GameServerStatus{NodeName: "node2", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs6", Labels: labels},
-				Status: stablev1alpha1.GameServerStatus{NodeName: "node2", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs7", Labels: labels},
-				Status: stablev1alpha1.GameServerStatus{NodeName: "node2", State: stablev1alpha1.GameServerStateReady}},
-			{ObjectMeta: metav1.ObjectMeta{Name: "gs8", Labels: labels},
-				Status: stablev1alpha1.GameServerStatus{NodeName: "node2", State: stablev1alpha1.GameServerStateReady}},
-		}
-
-		m.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-			return true, &stablev1alpha1.GameServerList{Items: gsList}, nil
-		})
-
-		stop, cancel := agtesting.StartInformers(m, hasSync)
-		defer cancel()
-
-		// This call initializes the cache
-		err := c.syncReadyGSServerCache()
-		assert.Nil(t, err)
-
-		err = c.counter.Run(0, stop)
-		assert.Nil(t, err)
-
-		gs, err := c.findReadyGameServerForAllocation(gsa, packedComparator)
-		assert.Nil(t, err)
-		assert.Equal(t, "node2", gs.Status.NodeName)
-		assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-	})
-}
-
-func TestControllerFindDistributedReadyGameServer(t *testing.T) {
-	t.Parallel()
-
-	c, m := newFakeController()
-	watch := watch.NewFake()
-	m.AgonesClient.AddWatchReactor("gameservers", k8stesting.DefaultWatchReactor(watch, nil))
-	hasSync := m.AgonesInformerFactory.Stable().V1alpha1().GameServers().Informer().HasSynced
-
-	labels := map[string]string{"role": "gameserver"}
-
-	gsa := &v1alpha1.GameServerAllocation{
-		Spec: v1alpha1.GameServerAllocationSpec{
-			Required: metav1.LabelSelector{
-				MatchLabels: labels,
+		gsa := &allocationv1.GameServerAllocation{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: defaultNs,
 			},
-			Scheduling: "",
-		},
-	}
+			Spec: allocationv1.GameServerAllocationSpec{
+				Required: metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: "thereisnofleet"}},
+			}}
+		gsa.ApplyDefaults()
 
-	gsList := []stablev1alpha1.GameServer{
-		{ObjectMeta: metav1.ObjectMeta{Name: "gs1", Namespace: defaultNs, Labels: labels},
-			Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateReady}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "gs2", Namespace: defaultNs, Labels: labels},
-			Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateReady}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "gs3", Namespace: defaultNs, Labels: labels},
-			Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateReady}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "gs4", Namespace: defaultNs, Labels: labels},
-			Status: stablev1alpha1.GameServerStatus{NodeName: "node1", State: stablev1alpha1.GameServerStateError}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "gs5", Namespace: defaultNs, Labels: labels},
-			Status: stablev1alpha1.GameServerStatus{NodeName: "node2", State: stablev1alpha1.GameServerStateReady}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "gs6", Namespace: defaultNs, Labels: labels},
-			Status: stablev1alpha1.GameServerStatus{NodeName: "node2", State: stablev1alpha1.GameServerStateReady}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "gs7", Namespace: defaultNs, Labels: labels},
-			Status: stablev1alpha1.GameServerStatus{NodeName: "node3", State: stablev1alpha1.GameServerStateReady}},
-	}
+		j1 := request{gsa: gsa.DeepCopy(), response: make(chan response)}
+		c.allocator.pendingRequests <- j1
 
-	m.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-		return true, &stablev1alpha1.GameServerList{Items: gsList}, nil
+		go c.allocator.ListenAndAllocate(3, stop)
+
+		res1 := <-j1.response
+		assert.Nil(t, res1.gs)
+		assert.Error(t, res1.err)
+		assert.Equal(t, ErrNoGameServerReady, res1.err)
 	})
-
-	stop, cancel := agtesting.StartInformers(m, hasSync)
-	defer cancel()
-
-	// This call initializes the cache
-	err := c.syncReadyGSServerCache()
-	assert.Nil(t, err)
-
-	err = c.counter.Run(0, stop)
-	assert.Nil(t, err)
-
-	gs, err := c.findReadyGameServerForAllocation(gsa, distributedComparator)
-	assert.Nil(t, err)
-	assert.Equal(t, "node3", gs.Status.NodeName)
-	assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-
-	change := gsList[6].DeepCopy()
-	change.Status.State = stablev1alpha1.GameServerStateAllocated
-	watch.Modify(change)
-	assert.True(t, cache.WaitForCacheSync(stop, hasSync))
-
-	gs, err = c.findReadyGameServerForAllocation(gsa, distributedComparator)
-	assert.Nil(t, err)
-	assert.Equal(t, "node2", gs.Status.NodeName)
-	assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-
-	change = gsList[4].DeepCopy()
-	change.Status.State = stablev1alpha1.GameServerStateAllocated
-	watch.Modify(change)
-	assert.True(t, cache.WaitForCacheSync(stop, hasSync))
-
-	gs, err = c.findReadyGameServerForAllocation(gsa, distributedComparator)
-	assert.Nil(t, err)
-	assert.Equal(t, "node1", gs.Status.NodeName)
-	assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-
-	change = gsList[0].DeepCopy()
-	change.Status.State = stablev1alpha1.GameServerStateAllocated
-	watch.Modify(change)
-	assert.True(t, cache.WaitForCacheSync(stop, hasSync))
-
-	gs, err = c.findReadyGameServerForAllocation(gsa, distributedComparator)
-	assert.Nil(t, err)
-	assert.Equal(t, "node2", gs.Status.NodeName)
-	assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-
-	change = gsList[5].DeepCopy()
-	change.Status.State = stablev1alpha1.GameServerStateAllocated
-	watch.Modify(change)
-	assert.True(t, cache.WaitForCacheSync(stop, hasSync))
-
-	gs, err = c.findReadyGameServerForAllocation(gsa, distributedComparator)
-	assert.Nil(t, err)
-	assert.Equal(t, "node1", gs.Status.NodeName)
-	assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-
-	change = gsList[1].DeepCopy()
-	change.Status.State = stablev1alpha1.GameServerStateAllocated
-	watch.Modify(change)
-	assert.True(t, cache.WaitForCacheSync(stop, hasSync))
-
-	gs, err = c.findReadyGameServerForAllocation(gsa, distributedComparator)
-	assert.Nil(t, err)
-	assert.Equal(t, "node1", gs.Status.NodeName)
-	assert.Equal(t, stablev1alpha1.GameServerStateReady, gs.Status.State)
-
-	change = gsList[2].DeepCopy()
-	change.Status.State = stablev1alpha1.GameServerStateAllocated
-	watch.Modify(change)
-	assert.True(t, cache.WaitForCacheSync(stop, hasSync))
-
-	gs, err = c.findReadyGameServerForAllocation(gsa, distributedComparator)
-	assert.Equal(t, ErrNoGameServerReady, err)
-	assert.Nil(t, gs)
 }
 
 func TestAllocationApiResource(t *testing.T) {
 	t.Parallel()
 
-	_, m := newFakeController()
+	c, m := newFakeController()
+	stop := signals.NewStopChannel()
+	c.registerAPIResource(stop)
+
 	ts := httptest.NewServer(m.Mux)
 	defer ts.Close()
 
 	client := ts.Client()
 
-	resp, err := client.Get(ts.URL + "/apis/" + v1alpha1.SchemeGroupVersion.String())
+	resp, err := client.Get(ts.URL + "/apis/" + allocationv1.SchemeGroupVersion.String())
 	if !assert.Nil(t, err) {
 		assert.FailNow(t, err.Error())
 	}
@@ -636,8 +471,9 @@ func TestAllocationApiResource(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(list)
 	assert.Nil(t, err)
 
-	assert.Len(t, list.APIResources, 1)
-	assert.Equal(t, "gameserverallocation", list.APIResources[0].SingularName)
+	if assert.Len(t, list.APIResources, 1) {
+		assert.Equal(t, "gameserverallocation", list.APIResources[0].SingularName)
+	}
 }
 
 func TestControllerRunCacheSync(t *testing.T) {
@@ -646,14 +482,14 @@ func TestControllerRunCacheSync(t *testing.T) {
 
 	m.AgonesClient.AddWatchReactor("gameservers", k8stesting.DefaultWatchReactor(watch, nil))
 
-	stop, cancel := agtesting.StartInformers(m, c.gameServerSynced)
+	stop, cancel := agtesting.StartInformers(m, c.allocator.readyGameServerCache.gameServerSynced)
 	defer cancel()
 
 	assertCacheEntries := func(expected int) {
 		count := 0
 		err := wait.PollImmediate(time.Second, 5*time.Second, func() (done bool, err error) {
 			count = 0
-			c.readyGameServers.Range(func(key string, gs *stablev1alpha1.GameServer) bool {
+			c.allocator.readyGameServerCache.readyGameServers.Range(func(key string, gs *agonesv1.GameServer) bool {
 				count++
 				return true
 			})
@@ -669,9 +505,9 @@ func TestControllerRunCacheSync(t *testing.T) {
 		assert.Nil(t, err)
 	}()
 
-	gs := stablev1alpha1.GameServer{
+	gs := agonesv1.GameServer{
 		ObjectMeta: metav1.ObjectMeta{Name: "gs1", Namespace: "default"},
-		Status:     stablev1alpha1.GameServerStatus{State: stablev1alpha1.GameServerStateStarting},
+		Status:     agonesv1.GameServerStatus{State: agonesv1.GameServerStateStarting},
 	}
 
 	logrus.Info("adding ready game server")
@@ -679,40 +515,67 @@ func TestControllerRunCacheSync(t *testing.T) {
 
 	assertCacheEntries(0)
 
-	gs.Status.State = stablev1alpha1.GameServerStateReady
+	gs.Status.State = agonesv1.GameServerStateReady
 	watch.Modify(gs.DeepCopy())
 
 	assertCacheEntries(1)
 
 	// try again, should be no change
-	gs.Status.State = stablev1alpha1.GameServerStateReady
+	gs.Status.State = agonesv1.GameServerStateReady
 	watch.Modify(gs.DeepCopy())
 
 	assertCacheEntries(1)
 
 	// now move it to Shutdown
-	gs.Status.State = stablev1alpha1.GameServerStateShutdown
+	gs.Status.State = agonesv1.GameServerStateShutdown
 	watch.Modify(gs.DeepCopy())
 
+	assertCacheEntries(0)
+
+	// add back in ready gameserver
+	gs.Status.State = agonesv1.GameServerStateReady
+	watch.Modify(gs.DeepCopy())
+	assertCacheEntries(0)
+	gs.Status.State = agonesv1.GameServerStateReady
+	watch.Modify(gs.DeepCopy())
+	assertCacheEntries(1)
+
+	// update with deletion timestamp
+	n := metav1.Now()
+	deletedCopy := gs.DeepCopy()
+	deletedCopy.ObjectMeta.DeletionTimestamp = &n
+	watch.Modify(deletedCopy)
+	assertCacheEntries(0)
+
+	// add back in ready gameserver
+	gs.Status.State = agonesv1.GameServerStateReady
+	watch.Modify(gs.DeepCopy())
+	assertCacheEntries(0)
+	gs.Status.State = agonesv1.GameServerStateReady
+	watch.Modify(gs.DeepCopy())
+	assertCacheEntries(1)
+
+	// now actually delete it
+	watch.Delete(gs.DeepCopy())
 	assertCacheEntries(0)
 }
 
 func TestGetRandomlySelectedGS(t *testing.T) {
 	c, _ := newFakeController()
-	c.topNGameServerCount = 5
-	gsa := &v1alpha1.GameServerAllocation{
+	c.allocator.topNGameServerCount = 5
+	gsa := &allocationv1.GameServerAllocation{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: defaultNs,
 			Name:      "allocation",
 		},
-		Status: v1alpha1.GameServerAllocationStatus{
-			State: v1alpha1.GameServerAllocationUnAllocated,
+		Status: allocationv1.GameServerAllocationStatus{
+			State: allocationv1.GameServerAllocationUnAllocated,
 		},
 	}
 
 	_, _, gsList := defaultFixtures(10)
 
-	selectedGS := c.getRandomlySelectedGS(gsa, gsList)
+	selectedGS := c.allocator.getRandomlySelectedGS(gsa, gsList)
 	assert.NotNil(t, "selectedGS can't be nil", selectedGS)
 	for i := 1; i <= 5; i++ {
 		expectedName := "gs" + strconv.Itoa(i)
@@ -721,14 +584,210 @@ func TestGetRandomlySelectedGS(t *testing.T) {
 
 	_, _, gsList = defaultFixtures(5)
 
-	selectedGS = c.getRandomlySelectedGS(gsa, gsList)
+	selectedGS = c.allocator.getRandomlySelectedGS(gsa, gsList)
 	assert.NotNil(t, "selectedGS can't be nil", selectedGS)
 
 	_, _, gsList = defaultFixtures(1)
 
-	selectedGS = c.getRandomlySelectedGS(gsa, gsList)
+	selectedGS = c.allocator.getRandomlySelectedGS(gsa, gsList)
 	assert.NotNil(t, "selectedGS can't be nil", selectedGS)
 	assert.Equal(t, "gs1", selectedGS.ObjectMeta.Name)
+}
+
+func TestControllerAllocationUpdateWorkers(t *testing.T) {
+	stop := signals.NewStopChannel()
+	t.Run("no error", func(t *testing.T) {
+		c, m := newFakeController()
+
+		updated := false
+		gs1 := &agonesv1.GameServer{
+			ObjectMeta: metav1.ObjectMeta{Name: "gs1"},
+		}
+		r := response{
+			request: request{
+				gsa:      &allocationv1.GameServerAllocation{},
+				response: make(chan response),
+			},
+			gs: gs1,
+		}
+
+		m.AgonesClient.AddReactor("update", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+			updated = true
+
+			uo := action.(k8stesting.UpdateAction)
+			gs := uo.GetObject().(*agonesv1.GameServer)
+
+			assert.Equal(t, gs1.ObjectMeta.Name, gs.ObjectMeta.Name)
+			assert.Equal(t, agonesv1.GameServerStateAllocated, gs.Status.State)
+
+			return true, gs, nil
+		})
+
+		updateQueue := c.allocator.allocationUpdateWorkers(1, stop)
+
+		go func() {
+			updateQueue <- r
+		}()
+
+		r = <-r.request.response
+
+		assert.True(t, updated)
+		assert.NoError(t, r.err)
+		assert.Equal(t, gs1.ObjectMeta.Name, r.gs.ObjectMeta.Name)
+		assert.Equal(t, agonesv1.GameServerStateAllocated, r.gs.Status.State)
+
+		agtesting.AssertEventContains(t, m.FakeRecorder.Events, "Allocated")
+
+		// make sure we can do more allocations than number of workers
+		gs2 := &agonesv1.GameServer{
+			ObjectMeta: metav1.ObjectMeta{Name: "gs1"},
+		}
+		r = response{
+			request: request{
+				gsa:      &allocationv1.GameServerAllocation{},
+				response: make(chan response),
+			},
+			gs: gs2,
+		}
+
+		go func() {
+			updateQueue <- r
+		}()
+
+		r = <-r.request.response
+
+		assert.True(t, updated)
+		assert.NoError(t, r.err)
+		assert.Equal(t, gs2.ObjectMeta.Name, r.gs.ObjectMeta.Name)
+		assert.Equal(t, agonesv1.GameServerStateAllocated, r.gs.Status.State)
+
+		agtesting.AssertEventContains(t, m.FakeRecorder.Events, "Allocated")
+	})
+
+	t.Run("error on update", func(t *testing.T) {
+		c, m := newFakeController()
+
+		updated := false
+		gs1 := &agonesv1.GameServer{
+			ObjectMeta: metav1.ObjectMeta{Name: "gs1"},
+		}
+		key, err := cache.MetaNamespaceKeyFunc(gs1)
+		assert.NoError(t, err)
+
+		_, ok := c.allocator.readyGameServerCache.readyGameServers.Load(key)
+		assert.False(t, ok)
+
+		r := response{
+			request: request{
+				gsa:      &allocationv1.GameServerAllocation{},
+				response: make(chan response),
+			},
+			gs: gs1,
+		}
+
+		m.AgonesClient.AddReactor("update", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+			updated = true
+
+			uo := action.(k8stesting.UpdateAction)
+			gs := uo.GetObject().(*agonesv1.GameServer)
+			assert.Equal(t, gs1.ObjectMeta.Name, gs.ObjectMeta.Name)
+			assert.Equal(t, agonesv1.GameServerStateAllocated, gs.Status.State)
+
+			return true, gs, errors.New("something went wrong")
+		})
+
+		updateQueue := c.allocator.allocationUpdateWorkers(1, stop)
+
+		go func() {
+			updateQueue <- r
+		}()
+
+		r = <-r.request.response
+
+		assert.True(t, updated)
+		assert.Error(t, r.err)
+		assert.Equal(t, gs1, r.gs)
+		agtesting.AssertNoEvent(t, m.FakeRecorder.Events)
+
+		var cached *agonesv1.GameServer
+		cached, ok = c.allocator.readyGameServerCache.readyGameServers.Load(key)
+		assert.True(t, ok)
+		assert.Equal(t, gs1.ObjectMeta.Name, cached.ObjectMeta.Name)
+	})
+}
+
+func TestControllerListSortedReadyGameServers(t *testing.T) {
+	t.Parallel()
+
+	gs1 := agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs1", Namespace: defaultNs, UID: "1"}, Status: agonesv1.GameServerStatus{NodeName: "node1", State: agonesv1.GameServerStateReady}}
+	gs2 := agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs2", Namespace: defaultNs, UID: "2"}, Status: agonesv1.GameServerStatus{NodeName: "node2", State: agonesv1.GameServerStateReady}}
+	gs3 := agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs3", Namespace: defaultNs, UID: "3"}, Status: agonesv1.GameServerStatus{NodeName: "node1", State: agonesv1.GameServerStateAllocated}}
+	gs4 := agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs4", Namespace: defaultNs, UID: "4"}, Status: agonesv1.GameServerStatus{NodeName: "node2", State: agonesv1.GameServerStateReady}}
+
+	fixtures := map[string]struct {
+		list []agonesv1.GameServer
+		test func(*testing.T, []*agonesv1.GameServer)
+	}{
+		"most allocated": {
+			// node1: 1 ready, 1 allocated, node2: 1 ready
+			list: []agonesv1.GameServer{gs1, gs2, gs3},
+			test: func(t *testing.T, list []*agonesv1.GameServer) {
+				assert.Len(t, list, 2)
+				if !assert.Equal(t, []*agonesv1.GameServer{&gs1, &gs2}, list) {
+					for _, gs := range list {
+						logrus.WithField("name", gs.Name).Info("game server")
+					}
+				}
+			},
+		},
+		"list ready": {
+			// node1: 1 ready, node2: 2 ready
+			list: []agonesv1.GameServer{gs1, gs2, gs4},
+			test: func(t *testing.T, list []*agonesv1.GameServer) {
+				assert.Len(t, list, 3)
+				assert.Contains(t, []string{"gs2", "gs4"}, list[0].ObjectMeta.Name)
+				assert.Contains(t, []string{"gs2", "gs4"}, list[1].ObjectMeta.Name)
+				assert.Equal(t, &gs1, list[2])
+			},
+		},
+		"lexicographical (node name)": {
+			list: []agonesv1.GameServer{gs2, gs1},
+			test: func(t *testing.T, list []*agonesv1.GameServer) {
+				assert.Len(t, list, 2)
+				if !assert.Equal(t, []*agonesv1.GameServer{&gs1, &gs2}, list) {
+					for _, gs := range list {
+						logrus.WithField("name", gs.Name).Info("game server")
+					}
+				}
+			},
+		},
+	}
+
+	for k, v := range fixtures {
+		t.Run(k, func(t *testing.T) {
+			c, m := newFakeController()
+
+			gsList := v.list
+
+			m.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+				return true, &agonesv1.GameServerList{Items: gsList}, nil
+			})
+
+			stop, cancel := agtesting.StartInformers(m, c.allocator.readyGameServerCache.gameServerSynced)
+			defer cancel()
+
+			// This call initializes the cache
+			err := c.allocator.readyGameServerCache.syncReadyGSServerCache()
+			assert.Nil(t, err)
+
+			err = c.allocator.readyGameServerCache.counter.Run(0, stop)
+			assert.Nil(t, err)
+
+			list := c.allocator.readyGameServerCache.ListSortedReadyGameServers()
+
+			v.test(t, list)
+		})
+	}
 }
 
 func TestMultiClusterAllocationFromLocal(t *testing.T) {
@@ -745,9 +804,9 @@ func TestMultiClusterAllocationFromLocal(t *testing.T) {
 							Priority: 1,
 							Weight:   200,
 							ConnectionInfo: multiclusterv1alpha1.ClusterConnectionInfo{
-								AllocationEndpoint: "localhost",
-								ClusterName:        "multicluster",
-								SecretName:         "localhostsecret",
+								ClusterName: "multicluster",
+								SecretName:  "localhostsecret",
+								Namespace:   defaultNs,
 							},
 						},
 						ObjectMeta: metav1.ObjectMeta{
@@ -759,24 +818,25 @@ func TestMultiClusterAllocationFromLocal(t *testing.T) {
 			}, nil
 		})
 
-		stop, cancel := agtesting.StartInformers(m, c.allocationPolicySynced, c.gameServerSynced)
+		stop, cancel := agtesting.StartInformers(m)
 		defer cancel()
 
-		// This call initializes the cache
-		err := c.syncReadyGSServerCache()
-		assert.Nil(t, err)
+		if err := c.Run(1, stop); err != nil {
+			assert.FailNow(t, err.Error())
+		}
+		// wait for it to be up and running
+		err := wait.PollImmediate(time.Second, 10*time.Second, func() (done bool, err error) {
+			return c.allocator.readyGameServerCache.workerqueue.RunCount() == 1, nil
+		})
+		assert.NoError(t, err)
 
-		err = c.counter.Run(0, stop)
-		assert.Nil(t, err)
-
-		gsa := &v1alpha1.GameServerAllocation{
+		gsa := &allocationv1.GameServerAllocation{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace:   defaultNs,
-				Name:        "alloc1",
-				ClusterName: "multicluster",
+				Namespace: defaultNs,
+				Name:      "alloc1",
 			},
-			Spec: v1alpha1.GameServerAllocationSpec{
-				MultiClusterSetting: v1alpha1.MultiClusterSetting{
+			Spec: allocationv1.GameServerAllocationSpec{
+				MultiClusterSetting: allocationv1.MultiClusterSetting{
 					Enabled: true,
 					PolicySelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
@@ -784,14 +844,15 @@ func TestMultiClusterAllocationFromLocal(t *testing.T) {
 						},
 					},
 				},
-				Required: metav1.LabelSelector{MatchLabels: map[string]string{stablev1alpha1.FleetNameLabel: fleetName}},
+				Required: metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: fleetName}},
 			},
 		}
 
 		ret, err := executeAllocation(gsa, c)
 		assert.NoError(t, err)
 		assert.Equal(t, gsa.Spec.Required, ret.Spec.Required)
-		expectedState := v1alpha1.GameServerAllocationAllocated
+		assert.Equal(t, gsa.Namespace, ret.Namespace)
+		expectedState := allocationv1.GameServerAllocationAllocated
 		assert.True(t, expectedState == ret.Status.State, "Failed: %s vs %s", expectedState, ret.Status.State)
 	})
 
@@ -805,24 +866,26 @@ func TestMultiClusterAllocationFromLocal(t *testing.T) {
 			}, nil
 		})
 
-		stop, cancel := agtesting.StartInformers(m, c.allocationPolicySynced, c.gameServerSynced)
+		stop, cancel := agtesting.StartInformers(m)
 		defer cancel()
 
-		// This call initializes the cache
-		err := c.syncReadyGSServerCache()
-		assert.Nil(t, err)
+		if err := c.Run(1, stop); err != nil {
+			assert.FailNow(t, err.Error())
+		}
+		// wait for it to be up and running
+		err := wait.PollImmediate(time.Second, 10*time.Second, func() (done bool, err error) {
+			return c.allocator.readyGameServerCache.workerqueue.RunCount() == 1, nil
+		})
+		assert.NoError(t, err)
 
-		err = c.counter.Run(0, stop)
-		assert.Nil(t, err)
-
-		gsa := &v1alpha1.GameServerAllocation{
+		gsa := &allocationv1.GameServerAllocation{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:   defaultNs,
 				Name:        "alloc1",
 				ClusterName: "multicluster",
 			},
-			Spec: v1alpha1.GameServerAllocationSpec{
-				MultiClusterSetting: v1alpha1.MultiClusterSetting{
+			Spec: allocationv1.GameServerAllocationSpec{
+				MultiClusterSetting: allocationv1.MultiClusterSetting{
 					Enabled: true,
 					PolicySelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
@@ -830,7 +893,7 @@ func TestMultiClusterAllocationFromLocal(t *testing.T) {
 						},
 					},
 				},
-				Required: metav1.LabelSelector{MatchLabels: map[string]string{stablev1alpha1.FleetNameLabel: fleetName}},
+				Required: metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: fleetName}},
 			},
 		}
 
@@ -840,23 +903,24 @@ func TestMultiClusterAllocationFromLocal(t *testing.T) {
 }
 
 func TestMultiClusterAllocationFromRemote(t *testing.T) {
+	const clusterName = "remotecluster"
 	t.Parallel()
 	t.Run("Handle allocation request remotely", func(t *testing.T) {
 		c, m := newFakeController()
 		fleetName := addReactorForGameServer(&m)
 
 		// Mock server
-		expectedGSAName := "mocked"
+		expectedGSName := "mocked"
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			serverResponse := v1alpha1.GameServerAllocation{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: expectedGSAName,
-				},
+			serverResponse := pb.AllocationResponse{
+				GameServerName: expectedGSName,
+				State:          pb.AllocationResponse_Allocated,
 			}
 			response, _ := json.Marshal(serverResponse)
 			_, _ = w.Write(response)
 		}))
 		defer server.Close()
+		serverURL := parseURL(t, server.URL)
 
 		// Set client CA for server
 		certpool := x509.NewCertPool()
@@ -865,8 +929,8 @@ func TestMultiClusterAllocationFromRemote(t *testing.T) {
 		server.TLS.ClientAuth = tls.RequireAndVerifyClientCert
 
 		// Allocation policy reactor
-		clusterName := "remotecluster"
 		secretName := clusterName + "secret"
+		targetedNamespace := "tns"
 		m.AgonesClient.AddReactor("list", "gameserverallocationpolicies", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
 			return true, &multiclusterv1alpha1.GameServerAllocationPolicyList{
 				Items: []multiclusterv1alpha1.GameServerAllocationPolicy{
@@ -875,9 +939,10 @@ func TestMultiClusterAllocationFromRemote(t *testing.T) {
 							Priority: 1,
 							Weight:   200,
 							ConnectionInfo: multiclusterv1alpha1.ClusterConnectionInfo{
-								AllocationEndpoint: server.URL,
-								ClusterName:        clusterName,
-								SecretName:         secretName,
+								AllocationEndpoints: []string{serverURL.Host, "non-existing"},
+								ClusterName:         clusterName,
+								SecretName:          secretName,
+								Namespace:           targetedNamespace,
 							},
 						},
 						ObjectMeta: metav1.ObjectMeta{
@@ -890,48 +955,59 @@ func TestMultiClusterAllocationFromRemote(t *testing.T) {
 
 		m.KubeClient.AddReactor("list", "secrets",
 			func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-				return true, getTestSecret(secretName, server.TLS.Certificates[0].Certificate[0]), nil
+				return true, getTestSecret(secretName, getPEMFromDER(server.TLS.Certificates[0].Certificate[0])), nil
 			})
 
-		stop, cancel := agtesting.StartInformers(m, c.allocationPolicySynced, c.secretSynced, c.gameServerSynced)
+		stop, cancel := agtesting.StartInformers(m, c.allocator.allocationPolicySynced, c.allocator.secretSynced, c.allocator.readyGameServerCache.gameServerSynced)
 		defer cancel()
 
 		// This call initializes the cache
-		err := c.syncReadyGSServerCache()
+		err := c.allocator.readyGameServerCache.syncReadyGSServerCache()
 		assert.Nil(t, err)
 
-		err = c.counter.Run(0, stop)
+		err = c.allocator.readyGameServerCache.counter.Run(0, stop)
 		assert.Nil(t, err)
 
-		gsa := &v1alpha1.GameServerAllocation{
+		gsa := &allocationv1.GameServerAllocation{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:   defaultNs,
 				Name:        "alloc1",
 				ClusterName: "localcluster",
 			},
-			Spec: v1alpha1.GameServerAllocationSpec{
-				MultiClusterSetting: v1alpha1.MultiClusterSetting{
+			Spec: allocationv1.GameServerAllocationSpec{
+				MultiClusterSetting: allocationv1.MultiClusterSetting{
 					Enabled: true,
 				},
-				Required: metav1.LabelSelector{MatchLabels: map[string]string{stablev1alpha1.FleetNameLabel: fleetName}},
+				Required: metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: fleetName}},
 			},
 		}
 
 		result, err := executeAllocation(gsa, c)
 		if assert.NoError(t, err) {
-			assert.Equal(t, expectedGSAName, result.ObjectMeta.Name)
+			assert.Equal(t, expectedGSName, result.Status.GameServerName)
 		}
 	})
 
-	t.Run("Remote server returns error", func(t *testing.T) {
+	t.Run("Remote server returns unallocated and then error", func(t *testing.T) {
 		c, m := newFakeController()
 		fleetName := addReactorForGameServer(&m)
 
-		// Mock server to return error
+		// Mock server to return unallocated and then error
+		count := 0
+		retry := 0
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "test error message", 500)
+			if count == 0 {
+				serverResponse := pb.AllocationResponse{}
+				response, _ := json.Marshal(serverResponse)
+				_, _ = w.Write(response)
+				count++
+			} else {
+				http.Error(w, "test error message", 500)
+				retry++
+			}
 		}))
 		defer server.Close()
+		serverURL := parseURL(t, server.URL)
 
 		// Set client CA for server
 		certpool := x509.NewCertPool()
@@ -940,7 +1016,6 @@ func TestMultiClusterAllocationFromRemote(t *testing.T) {
 		server.TLS.ClientAuth = tls.RequireAndVerifyClientCert
 
 		// Allocation policy reactor
-		clusterName := "remotecluster"
 		secretName := clusterName + "secret"
 		m.AgonesClient.AddReactor("list", "gameserverallocationpolicies", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
 			return true, &multiclusterv1alpha1.GameServerAllocationPolicyList{
@@ -950,9 +1025,115 @@ func TestMultiClusterAllocationFromRemote(t *testing.T) {
 							Priority: 1,
 							Weight:   200,
 							ConnectionInfo: multiclusterv1alpha1.ClusterConnectionInfo{
-								AllocationEndpoint: server.URL,
-								ClusterName:        clusterName,
-								SecretName:         secretName,
+								AllocationEndpoints: []string{serverURL.Host},
+								ClusterName:         clusterName,
+								SecretName:          secretName,
+							},
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "name1",
+							Namespace: defaultNs,
+						},
+					},
+					{
+						Spec: multiclusterv1alpha1.GameServerAllocationPolicySpec{
+							Priority: 2,
+							Weight:   200,
+							ConnectionInfo: multiclusterv1alpha1.ClusterConnectionInfo{
+								AllocationEndpoints: []string{serverURL.Host},
+								ClusterName:         "remotecluster2",
+								SecretName:          secretName,
+							},
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "name2",
+							Namespace: defaultNs,
+						},
+					},
+				},
+			}, nil
+		})
+
+		m.KubeClient.AddReactor("list", "secrets",
+			func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+				return true, getTestSecret(secretName, getPEMFromDER(server.TLS.Certificates[0].Certificate[0])), nil
+			})
+
+		stop, cancel := agtesting.StartInformers(m, c.allocator.allocationPolicySynced, c.allocator.secretSynced, c.allocator.readyGameServerCache.gameServerSynced)
+		defer cancel()
+
+		// This call initializes the cache
+		err := c.allocator.readyGameServerCache.syncReadyGSServerCache()
+		assert.Nil(t, err)
+
+		err = c.allocator.readyGameServerCache.counter.Run(0, stop)
+		assert.Nil(t, err)
+
+		gsa := &allocationv1.GameServerAllocation{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:   defaultNs,
+				Name:        "alloc1",
+				ClusterName: "localcluster",
+			},
+			Spec: allocationv1.GameServerAllocationSpec{
+				MultiClusterSetting: allocationv1.MultiClusterSetting{
+					Enabled: true,
+				},
+				Required: metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: fleetName}},
+			},
+		}
+
+		_, err = executeAllocation(gsa, c)
+		if assert.Error(t, err) {
+			assert.Contains(t, err.Error(), "test error message")
+		}
+		assert.Truef(t, retry > 1, "Retry count %v. Expecting to retry on error.", retry)
+	})
+
+	t.Run("First server fails and second server succeeds", func(t *testing.T) {
+		c, m := newFakeController()
+		fleetName := addReactorForGameServer(&m)
+
+		// Mock server to return error
+		unhealthyServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "test error message", 500)
+		}))
+		defer unhealthyServer.Close()
+		unhealthyServerURL := parseURL(t, unhealthyServer.URL)
+
+		// Set client CA for unhealthy server
+		certpool := x509.NewCertPool()
+		certpool.AppendCertsFromPEM(clientCert)
+		unhealthyServer.TLS.ClientCAs = certpool
+		unhealthyServer.TLS.ClientAuth = tls.RequireAndVerifyClientCert
+
+		// Mock healthyServer
+		expectedGSName := "mocked"
+		healthyServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			serverResponse := pb.AllocationResponse{
+				GameServerName: expectedGSName,
+				State:          pb.AllocationResponse_Allocated,
+			}
+			response, _ := json.Marshal(serverResponse)
+			_, _ = w.Write(response)
+		}))
+		defer healthyServer.Close()
+		healthyServerURL := parseURL(t, healthyServer.URL)
+		healthyServer.TLS = unhealthyServer.TLS
+
+		// Allocation policy reactor
+		secretName := clusterName + "secret"
+		m.AgonesClient.AddReactor("list", "gameserverallocationpolicies", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+			return true, &multiclusterv1alpha1.GameServerAllocationPolicyList{
+				Items: []multiclusterv1alpha1.GameServerAllocationPolicy{
+					{
+						Spec: multiclusterv1alpha1.GameServerAllocationPolicySpec{
+							Priority: 1,
+							Weight:   200,
+							ConnectionInfo: multiclusterv1alpha1.ClusterConnectionInfo{
+								AllocationEndpoints: []string{unhealthyServerURL.Host, healthyServerURL.Host},
+								ClusterName:         clusterName,
+								SecretName:          secretName,
 							},
 						},
 						ObjectMeta: metav1.ObjectMeta{
@@ -965,36 +1146,37 @@ func TestMultiClusterAllocationFromRemote(t *testing.T) {
 
 		m.KubeClient.AddReactor("list", "secrets",
 			func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-				return true, getTestSecret(secretName, server.TLS.Certificates[0].Certificate[0]), nil
+				return true, getTestSecret(secretName, getPEMFromDER(unhealthyServer.TLS.Certificates[0].Certificate[0])), nil
 			})
 
-		stop, cancel := agtesting.StartInformers(m, c.allocationPolicySynced, c.secretSynced, c.gameServerSynced)
+		stop, cancel := agtesting.StartInformers(m, c.allocator.allocationPolicySynced, c.allocator.secretSynced, c.allocator.readyGameServerCache.gameServerSynced)
 		defer cancel()
 
 		// This call initializes the cache
-		err := c.syncReadyGSServerCache()
+		err := c.allocator.readyGameServerCache.syncReadyGSServerCache()
 		assert.Nil(t, err)
 
-		err = c.counter.Run(0, stop)
+		err = c.allocator.readyGameServerCache.counter.Run(0, stop)
 		assert.Nil(t, err)
 
-		gsa := &v1alpha1.GameServerAllocation{
+		gsa := &allocationv1.GameServerAllocation{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:   defaultNs,
 				Name:        "alloc1",
 				ClusterName: "localcluster",
 			},
-			Spec: v1alpha1.GameServerAllocationSpec{
-				MultiClusterSetting: v1alpha1.MultiClusterSetting{
+			Spec: allocationv1.GameServerAllocationSpec{
+				MultiClusterSetting: allocationv1.MultiClusterSetting{
 					Enabled: true,
 				},
-				Required: metav1.LabelSelector{MatchLabels: map[string]string{stablev1alpha1.FleetNameLabel: fleetName}},
+				Required: metav1.LabelSelector{MatchLabels: map[string]string{agonesv1.FleetNameLabel: fleetName}},
 			},
 		}
 
-		_, err = executeAllocation(gsa, c)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "test error message")
+		result, err := executeAllocation(gsa, c)
+		if assert.NoError(t, err) {
+			assert.Equal(t, expectedGSName, result.Status.GameServerName)
+		}
 	})
 }
 
@@ -1002,7 +1184,7 @@ func TestCreateRestClientError(t *testing.T) {
 	t.Parallel()
 	t.Run("Missing secret", func(t *testing.T) {
 		c, _ := newFakeController()
-		_, err := c.createRemoteClusterRestClient(defaultNs, "secret-name")
+		_, err := c.allocator.createRemoteClusterRestClient(defaultNs, "secret-name")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "secret-name")
 	})
@@ -1023,10 +1205,10 @@ func TestCreateRestClientError(t *testing.T) {
 					}}}, nil
 			})
 
-		_, cancel := agtesting.StartInformers(m, c.secretSynced)
+		_, cancel := agtesting.StartInformers(m, c.allocator.secretSynced)
 		defer cancel()
 
-		_, err := c.createRemoteClusterRestClient(defaultNs, "secret-name")
+		_, err := c.allocator.createRemoteClusterRestClient(defaultNs, "secret-name")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "missing client certificate key pair in secret secret-name")
 	})
@@ -1048,10 +1230,10 @@ func TestCreateRestClientError(t *testing.T) {
 					}}}, nil
 			})
 
-		_, cancel := agtesting.StartInformers(m, c.secretSynced)
+		_, cancel := agtesting.StartInformers(m, c.allocator.secretSynced)
 		defer cancel()
 
-		_, err := c.createRemoteClusterRestClient(defaultNs, "secret-name")
+		_, err := c.allocator.createRemoteClusterRestClient(defaultNs, "secret-name")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to find any PEM data in certificate input")
 	})
@@ -1063,26 +1245,27 @@ func TestCreateRestClientError(t *testing.T) {
 				return true, getTestSecret("secret-name", []byte("XXX")), nil
 			})
 
-		_, cancel := agtesting.StartInformers(m, c.secretSynced)
+		_, cancel := agtesting.StartInformers(m, c.allocator.secretSynced)
 		defer cancel()
 
-		_, err := c.createRemoteClusterRestClient(defaultNs, "secret-name")
+		_, err := c.allocator.createRemoteClusterRestClient(defaultNs, "secret-name")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "certificate")
+		assert.Contains(t, err.Error(), "PEM format")
 	})
 }
 
-func executeAllocation(gsa *v1alpha1.GameServerAllocation, c *Controller) (*v1alpha1.GameServerAllocation, error) {
+func executeAllocation(gsa *allocationv1.GameServerAllocation, c *Controller) (*allocationv1.GameServerAllocation, error) {
+	stop := signals.NewStopChannel()
 	r, err := createRequest(gsa)
 	if err != nil {
 		return nil, err
 	}
 	rec := httptest.NewRecorder()
-	if err = c.allocationHandler(rec, r, defaultNs); err != nil {
+	if err = c.processAllocationRequest(rec, r, gsa.Namespace, stop); err != nil {
 		return nil, err
 	}
 
-	ret := &v1alpha1.GameServerAllocation{}
+	ret := &allocationv1.GameServerAllocation{}
 	err = json.Unmarshal(rec.Body.Bytes(), ret)
 	return ret, err
 }
@@ -1092,18 +1275,18 @@ func addReactorForGameServer(m *agtesting.Mocks) string {
 	gsWatch := watch.NewFake()
 	m.AgonesClient.AddWatchReactor("gameservers", k8stesting.DefaultWatchReactor(gsWatch, nil))
 	m.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-		return true, &stablev1alpha1.GameServerList{Items: gsList}, nil
+		return true, &agonesv1.GameServerList{Items: gsList}, nil
 	})
 	m.AgonesClient.AddReactor("update", "gameservers", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
 		ua := action.(k8stesting.UpdateAction)
-		gs := ua.GetObject().(*stablev1alpha1.GameServer)
+		gs := ua.GetObject().(*agonesv1.GameServer)
 		gsWatch.Modify(gs)
 		return true, gs, nil
 	})
 	return f.ObjectMeta.Name
 }
 
-func createRequest(gsa *v1alpha1.GameServerAllocation) (*http.Request, error) {
+func createRequest(gsa *allocationv1.GameServerAllocation) (*http.Request, error) {
 	buf := bytes.NewBuffer(nil)
 	if err := json.NewEncoder(buf).Encode(gsa); err != nil {
 		return nil, err
@@ -1118,26 +1301,26 @@ func createRequest(gsa *v1alpha1.GameServerAllocation) (*http.Request, error) {
 	return r, nil
 }
 
-func defaultFixtures(gsLen int) (*stablev1alpha1.Fleet, *stablev1alpha1.GameServerSet, []stablev1alpha1.GameServer) {
-	f := &stablev1alpha1.Fleet{
+func defaultFixtures(gsLen int) (*agonesv1.Fleet, *agonesv1.GameServerSet, []agonesv1.GameServer) {
+	f := &agonesv1.Fleet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fleet-1",
 			Namespace: defaultNs,
 			UID:       "1234",
 		},
-		Spec: stablev1alpha1.FleetSpec{
+		Spec: agonesv1.FleetSpec{
 			Replicas: 5,
-			Template: stablev1alpha1.GameServerTemplateSpec{},
+			Template: agonesv1.GameServerTemplateSpec{},
 		},
 	}
 	f.ApplyDefaults()
 	gsSet := f.GameServerSet()
 	gsSet.ObjectMeta.Name = "gsSet1"
-	var gsList []stablev1alpha1.GameServer
+	var gsList []agonesv1.GameServer
 	for i := 1; i <= gsLen; i++ {
 		gs := gsSet.GameServer()
 		gs.ObjectMeta.Name = "gs" + strconv.Itoa(i)
-		gs.Status.State = stablev1alpha1.GameServerStateReady
+		gs.Status.State = agonesv1.GameServerStateReady
 		gsList = append(gsList, *gs)
 	}
 	return f, gsSet, gsList
@@ -1149,8 +1332,10 @@ func newFakeController() (*Controller, agtesting.Mocks) {
 	m.Mux = http.NewServeMux()
 	counter := gameservers.NewPerNodeCounter(m.KubeInformerFactory, m.AgonesInformerFactory)
 	api := apiserver.NewAPIServer(m.Mux)
-	c := NewController(api, healthcheck.NewHandler(), counter, 1, m.KubeClient, m.KubeInformerFactory, m.AgonesClient, m.AgonesInformerFactory)
+	c := NewController(api, healthcheck.NewHandler(), counter, m.KubeClient, m.KubeInformerFactory, m.AgonesClient, m.AgonesInformerFactory)
+	c.allocator.topNGameServerCount = 1
 	c.recorder = m.FakeRecorder
+	c.allocator.recorder = m.FakeRecorder
 	return c, m
 }
 
@@ -1170,6 +1355,18 @@ func getTestSecret(secretName string, serverCert []byte) *corev1.SecretList {
 			},
 		},
 	}
+}
+
+func getPEMFromDER(der []byte) []byte {
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+}
+
+func parseURL(t *testing.T, rawURL string) *url.URL {
+	serverURL, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("failed to parse URL %s: %s", rawURL, err)
+	}
+	return serverURL
 }
 
 var clientCert = []byte(`-----BEGIN CERTIFICATE-----

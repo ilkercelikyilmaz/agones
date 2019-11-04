@@ -35,7 +35,7 @@ While not required, you may wish to go through the [Create a Game Server]({{< re
 Let's create a Fleet using the following command :
 
 ```
-kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/simple-udp/fleet.yaml
+kubectl apply -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/fleet.yaml
 ```
 
 You should see a successful output similar to this :
@@ -80,15 +80,15 @@ watch kubectl describe fleet simple-udp
 Name:         simple-udp
 Namespace:    default
 Labels:       <none>
-Annotations:  kubectl.kubernetes.io/last-applied-configuration={"apiVersion":"stable.agones.dev/v1alpha1","kind":"Fleet","metadata":{"annotations":{},"name":"simple-udp","namespace":"default"},"spec":{"replicas":2,...
-API Version:  stable.agones.dev/v1alpha1
+Annotations:  kubectl.kubernetes.io/last-applied-configuration={"apiVersion":"agones.dev/v1","kind":"Fleet","metadata":{"annotations":{},"name":"simple-udp","namespace":"default"},"spec":{"replicas":2,...
+API Version:  agones.dev/v1
 Kind:         Fleet
 Metadata:
   Cluster Name:
   Creation Timestamp:  2018-07-01T18:55:35Z
   Generation:          1
   Resource Version:    24685
-  Self Link:           /apis/stable.agones.dev/v1alpha1/namespaces/default/fleets/simple-udp
+  Self Link:           /apis/agones.dev/v1/namespaces/default/fleets/simple-udp
   UID:                 56710a91-7d60-11e8-b2dd-08002703ef08
 Spec:
   Replicas:  2
@@ -111,7 +111,7 @@ Spec:
           Creation Timestamp:  <nil>
         Spec:
           Containers:
-            Image:  gcr.io/agones-images/udp-server:0.9
+            Image:  {{< example-image >}}
             Name:   simple-udp
             Resources:
 Status:
@@ -149,35 +149,32 @@ simple-udp-sdhzn-wnhsw   Ready    192.168.122.205   7478    minikube   52m
 Since we have a fleet of warm gameservers, we need a way to request one of them for usage, and mark that it has
 players access it (and therefore, it should not be deleted until they are finished with it).
 
-> In production, you would likely do the following through a [Kubernetes API call]({{< ref "/docs/Guides/access-api.md" >}}), but we can also
+{{< alert title="Note" color="info">}}
+ In production, you would likely do the following through a [Kubernetes API call]({{< ref "/docs/Guides/access-api.md" >}}), but we can also
 do this through `kubectl` as well, and ask it to return the response in yaml so that we can see what has happened.
-
-#### GameServerAllocation
-
-> GameServerAllocation will eventually replace FleetAllocation, but is currently experimental, and likely to change in upcoming releases.
-  However, we welcome you to test it out in its current format and provide feedback.
+{{< /alert >}}
 
 We can do allocation of a GameServer for usage through a `GameServerAllocation`, which will both 
 return to us the details of a `GameServer` (assuming one is available), and also move it to the `Allocated` state,
 which demarcates that it has players on it, and should not be removed until `SDK.Shutdown()` is called, or it is manually deleted.
 
-It is worth noting that there is nothing specific that ties a `GameServerAllocation`. A `GameServerAllocation` uses
-a [lable selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/) to determine what
-group of `GameServers` it will attempt to allocate out of. That being said, a `Fleet` and `GameServerAllocation`
+It is worth noting that there is nothing specific that ties a `GameServerAllocation` to a fleet. 
+A `GameServerAllocation` uses a [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/) 
+to determine what group of `GameServers` it will attempt to allocate out of. That being said, a `Fleet` and `GameServerAllocation`
 are often used in conjunction.
 
 {{< ghlink href="/examples/simple-udp/gameserverallocation.yaml" >}}This example{{< /ghlink >}} uses the label selector to specifically target the `simple-udp` fleet that we just created.
 
 ```
-kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/simple-udp/gameserverallocation.yaml -o yaml
+kubectl create -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/gameserverallocation.yaml -o yaml
 ```
 
-For the full details of the YAML file head to the [Fleet Specification Guide]({{< ref "/docs/Reference/fleet.md#gameserver-allocation-specification" >}})
+For the full details of the YAML file head to the [GameServerAllocation Specification Guide]({{< ref "/docs/Reference/gameserverallocation.md" >}})
 
 You should get back a response that looks like the following:
 
 ```yaml
-apiVersion: allocation.agones.dev/v1alpha1
+apiVersion: allocation.agones.dev/v1
 kind: GameServerAllocation
 metadata:
   creationTimestamp: 2019-02-19T02:13:12Z
@@ -187,7 +184,7 @@ spec:
   metadata: {}
   required:
     matchLabels:
-      stable.agones.dev/fleet: simple-udp
+      agones.dev/fleet: simple-udp
   scheduling: Packed
 status:
   address: 192.168.122.152
@@ -228,101 +225,10 @@ simple-udp-sdhzn-wng5k   Ready       192.168.122.205   7709   minikube  53m
 simple-udp-sdhzn-wnhsw   Ready       192.168.122.205   7478   minikube  52m
 ```
 
-> `GameServerAllocations` are create only and not stored for performance reasons, so you won't be able to list
+{{< alert title="Note" color="info">}}
+ `GameServerAllocations` are create only and not stored for performance reasons, so you won't be able to list
   them after they have been created - but you can see their effects on `GameServers`
-
-#### FleetAllocation
-
-> Fleet Allocation is **deprecated** in version 0.10.0, and will be removed in the 0.12.0 release.
-  Migrate to using GameServer Allocation instead.
-
-We can do allocation of a GameServer for usage through a `FleetAllocation`, which will both return to us a `GameServer` (assuming one is available)
-and also move it to the `Allocated` state.
-
-```
-kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/simple-udp/fleetallocation.yaml -o yaml
-```
-
-For the full details of the YAML file head to the [Fleet Specification Guide]({{< ref "/docs/Reference/fleet.md#fleet-allocation-specification" >}})
-
-You should get back a response that looks like the following:
-
-```
-apiVersion: stable.agones.dev/v1alpha1
-kind: FleetAllocation
-metadata:
-  clusterName: ""
-  creationTimestamp: 2018-07-01T18:56:31Z
-  generateName: simple-udp-
-  generation: 1
-  name: simple-udp-l7dn9
-  namespace: default
-  ownerReferences:
-  - apiVersion: stable.agones.dev/v1alpha1
-    blockOwnerDeletion: true
-    controller: true
-    kind: GameServer
-    name: simple-udp-wlqnd-s2xr5
-    uid: 5676a611-7d60-11e8-b2dd-08002703ef08
-  resourceVersion: "24719"
-  selfLink: /apis/stable.agones.dev/v1alpha1/namespaces/default/fleetallocations/simple-udp-l7dn9
-  uid: 77c22f17-7d60-11e8-b2dd-08002703ef08
-spec:
-  fleetName: simple-udp
-status:
-  GameServer:
-    metadata:
-      creationTimestamp: 2018-07-01T18:55:35Z
-      finalizers:
-      - stable.agones.dev
-      generateName: simple-udp-wlqnd-
-      generation: 1
-      labels:
-        stable.agones.dev/gameserverset: simple-udp-wlqnd
-      name: simple-udp-wlqnd-s2xr5
-      namespace: default
-      ownerReferences:
-      - apiVersion: stable.agones.dev/v1alpha1
-        blockOwnerDeletion: true
-        controller: true
-        kind: GameServerSet
-        name: simple-udp-wlqnd
-        uid: 56731f1a-7d60-11e8-b2dd-08002703ef08
-      resourceVersion: "24716"
-      selfLink: /apis/stable.agones.dev/v1alpha1/namespaces/default/gameservers/simple-udp-wlqnd-s2xr5
-      uid: 5676a611-7d60-11e8-b2dd-08002703ef08
-    spec:
-      container: simple-udp
-      health:
-        failureThreshold: 3
-        initialDelaySeconds: 5
-        periodSeconds: 5
-      ports:
-      - containerPort: 7654
-        hostPort: 7604
-        name: default
-        portPolicy: Dynamic
-        protocol: UDP
-      template:
-        metadata:
-          creationTimestamp: null
-        spec:
-          containers:
-          - image: gcr.io/agones-images/udp-server:0.9
-            name: simple-udp
-            resources: {}
-    status:
-      address: 192.168.99.100
-      nodeName: agones
-      ports:
-      - name: default
-        port: 7604
-      state: Allocated
-```
-
-If you see the `status` section, you should see that there is a `GameServer`, and if you look at its
-`status > state` value, you can also see that it has been moved to `Allocated`. This means you have been successfully
-allocated a `GameServer` out of the fleet, and you can now connect your players to it!
+{{< /alert >}}
 
 A handy trick for checking to see how many `GameServers` you have `Allocated` vs `Ready`, run the following:
 
@@ -376,7 +282,7 @@ Since we've only got one allocation, we'll just grab the details of the IP and p
 only allocated `GameServer`:
 
 ```
-kubectl get $(kubectl get fleetallocation -o name) -o jsonpath='{.status.gameServer.status.ports[0].port}'
+kubectl get gameservers | grep Allocated | awk '{print $3":"$4 }'
 ```
 
 This should output your Game Server IP address and port. (eg `10.130.65.208:7936`)
@@ -408,7 +314,7 @@ Let's take this for a spin! Run `kubectl scale fleet simple-udp --replicas=5` to
 Let's also allocate ourselves a `GameServer`
 
 ```
-kubectl create -f https://raw.githubusercontent.com/GoogleCloudPlatform/agones/{{< release-branch >}}/examples/simple-udp/fleetallocation.yaml -o yaml
+kubectl create -f https://raw.githubusercontent.com/googleforgames/agones/{{< release-branch >}}/examples/simple-udp/gameserverallocation.yaml -o yaml
 ```
 
 We should now have four `Ready` `GameServers` and one `Allocated`.
@@ -426,23 +332,27 @@ simple-udp-tfqn7-w8z7b   Ready       192.168.39.150   7226   minikube   5m
 
 In production, we'd likely be changing a `containers > image` configuration to update our `Fleet`
 to run a new game server process, but to make this example simple, change `containerPort` from `7654`
-to `6000`. Save the file and exit.
+to `6000`.
+
+Run `kubectl edit fleet simple-udp`, and make the necessary changes, and then save and exit your editor. 
 
 This will start the deployment of a new set of `GameServers` running
 with a Container Port of `6000`.
 
-> NOTE: This will make it such that you can no longer connect to the simple-udp game server.  
+{{< alert title="Warning" color="warning">}}
+This will make it such that you can no longer connect to the simple-udp game server.  
+{{< /alert >}}
 
 Run `watch kubectl get gs`
 until you can see that there is
-one of `7654`, which is the `Allocated` `GameServer`, and four instances to `6000` which
+one with a containerPort of `7654`, which is the `Allocated` `GameServer`, and four instances with a containerPort of `6000` which
 is the new configuration.
 
 You have now deployed a new version of your game!
 
 ## Next Steps
 
-- Have a look at the [GameServerAllocation specification]({{< ref "/docs/Reference/fleet.md#gameserver-allocation-specification" >}}), and see
+- Have a look at the [GameServerAllocation specification]({{< ref "/docs/Reference/gameserverallocation.md" >}}), and see
     how the extra functionality can enable smoke testing, server information communication, and more.
 - You can now create a fleet autoscaler to automatically resize your fleet based on the actual usage.
   See [Create a Fleet Autoscaler]({{< relref "create-fleetautoscaler.md" >}}).

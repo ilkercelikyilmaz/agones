@@ -9,11 +9,8 @@ weight: 120
 
 These are full examples for each of the resource types of Agones
 
-> These examples are for reference only. They are not backed by working images.
-
 - {{< ghlink href="examples/gameserver.yaml" >}}Full GameServer Configuration{{< /ghlink >}}
 - {{< ghlink href="examples/fleet.yaml" >}}Full Fleet Configuration{{< /ghlink >}}
-- {{< ghlink href="examples/fleetallocation.yaml" >}}Full Fleet Allocation Configuration (deprecated) {{< /ghlink >}}
 - {{< ghlink href="examples/gameserverallocation.yaml" >}}Full GameServer Allocation Configuration{{< /ghlink >}}
 - {{< ghlink href="examples/fleetautoscaler.yaml" >}}Full Autoscaler Configuration with Buffer Strategy{{< /ghlink >}}
 - {{< ghlink href="examples/webhookfleetautoscaler.yaml" >}}Full Autoscaler Configuration with Webhook Strategy{{< /ghlink >}}
@@ -24,6 +21,7 @@ These are full examples for each of the resource types of Agones
 These are all examples of simple game server implementations, that integrate the Agones game server SDK. 
 
 - {{< ghlink href="examples/simple-udp" >}}Simple UDP{{< /ghlink >}} (Go) - simple server and client that send UDP packets back and forth.
+- {{< ghlink href="examples/simple-tcp" >}}Simple TCP{{< /ghlink >}} (Go) - simple server that responds to new-line delimited messages sent over a TCP connection.
 - {{< ghlink href="examples/cpp-simple" >}}CPP Simple{{< /ghlink >}} (C++) - C++ example that starts up, stays healthy and then shuts down after 60 seconds.
 - {{< ghlink href="examples/nodejs-simple" >}}Node.js Simple{{< /ghlink >}} (Node.js) -
   A simple Node.js example that marks itself as ready, sets some labels and then shutsdown.
@@ -34,6 +32,6 @@ These are all examples of simple game server implementations, that integrate the
 ## Building on top of Agones
 
 - {{< ghlink href="examples/allocator-service" >}}Allocator Service{{< /ghlink >}} (Go) - 
-  This service provides an example of using the 
-  [Agones API](https://godoc.org/agones.dev/agones/pkg/client/clientset/versioned/typed/stable/v1alpha1) to allocate a GameServer from a Fleet, 
+  This service provides an example of using the [Agones API](https://godoc.org/agones.dev/agones/pkg/client/clientset/versioned/typed/agones/v1)
+  to allocate a GameServer from a Fleet,
   and is used in the [Create an Allocator Service (Go)]({{< ref "/docs/Tutorials/allocator-service-go.md" >}}) tutorial.

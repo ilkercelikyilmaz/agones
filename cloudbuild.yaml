@@ -29,6 +29,20 @@ steps:
     - '--key=$_HTMLTEST_CACHE_KEY'
   waitFor: ['-']
 
+- name: gcr.io/$PROJECT_ID/restore_cache
+  id: cpp-sdk-build-restore-cache
+  args:
+    - '--bucket=gs://$_CACHE_BUCKET'
+    - '--key=$_CPP_SDK_BUILD_CACHE_KEY'
+  waitFor: ['-']
+
+- name: gcr.io/$PROJECT_ID/restore_cache
+  id: rust-sdk-build-restore-cache
+  args:
+    - '--bucket=gs://$_CACHE_BUCKET'
+    - '--key=$_RUST_SDK_BUILD_CACHE_KEY-$( checksum test/sdk/rust/Cargo.toml )'
+  waitFor: ['-']
+
 #
 # Creates the initial make + docker build platform
 #
@@ -95,6 +109,69 @@ steps:
   args: ["lint"] # pull the build image if it exists
 
 #
+# Push the build image, can run while we do other things.
+#
+
+- name: "make-docker"
+  waitFor:
+    - lint
+  dir: "build"
+  args: ["push-build-image"] # push the build image (which won't do anything if it's already there)
+
+#
+# Push the sdk base build image, which can also run while we do other things
+#
+
+- name: "make-docker"
+  waitFor:
+    - ensure-build-sdk-image-base
+  dir: "build"
+  args: ["push-build-sdk-base-image"]
+
+#
+# Build all the images and sdks, and push them up to the repository
+#
+
+- name: "make-docker"
+  id: build-images
+  waitFor:
+    - lint
+  dir: "build"
+  args: [ "-j", "4", "build-images"]
+- name: "make-docker"
+  id: push-images
+  waitFor:
+    - build-images
+  dir: "build"
+  args: [ "-j", "4", "push"]
+
+#
+# Build all the SDKs
+#
+
+- name: "make-docker"
+  id: build-sdks
+  waitFor:
+    - lint
+    - cpp-sdk-build-restore-cache
+    - ensure-build-sdk-image-base
+  dir: "build"
+  args: [ "-j", "4", "--output-sync=target", "build-sdks"]
+
+#
+# Cache the cpp sdk build directory, to speed up subsequent builds (considerably)
+#
+
+- name: 'gcr.io/$PROJECT_ID/save_cache'
+  args:
+    - '--bucket=gs://$_CACHE_BUCKET'
+    - '--key=$_CPP_SDK_BUILD_CACHE_KEY'
+    - '--path=sdks/cpp/.build'
+  id: cpp-sdk-build-save-cache
+  waitFor:
+    - build-sdks
+
+#
 # Run the all the automated tests (except e2e) in parallel
 #
 
@@ -120,46 +197,10 @@ steps:
     - tests
 
 #
-# Push the build image, can run while we do other things.
-#
-
-- name: "make-docker"
-  waitFor:
-    - lint
-  dir: "build"
-  args: ["push-build-image"] # push the build image (which won't do anything if it's already there)
-
-#
-# Push the sdk base build image, which can also run while we do other things
-#
-
-- name: "make-docker"
-  waitFor:
-    - ensure-build-sdk-image-base
-  dir: "build"
-  args: ["push-build-sdk-base-image"]
-
-#
-# Build all the images and sdks, and push them up to the repository
-#
-
-- name: "make-docker"
-  id: build
-  waitFor:
-    - lint
-    - ensure-build-sdk-image-base
-  dir: "build"
-  args: [ "-j", "4", "build"]
-- name: "make-docker"
-  id: push-images
-  waitFor:
-    - build
-  dir: "build"
-  args: [ "-j", "3", "push"]
-
-#
 # Site preview
 #
+
+# don't promote, as it can cause failures when two deploys try and promote at the same time.
 
 - name: "make-docker" # build a preview of the website
   id: site-static
@@ -191,25 +232,53 @@ steps:
     - build-e2e
 
 #
+# SDK conformance tests
+#
+
+- name: "make-docker"
+  id: sdk-conformance
+  dir: "build"
+  args: [ "-j", "4", "--output-sync=target", "run-sdk-conformance-tests"]
+  waitFor:
+    - build-images
+
+#
+# Cache the Rust SDK build directory, to speed up subsequent builds (considerably)
+#
+
+- name: 'gcr.io/$PROJECT_ID/save_cache'
+  args:
+    - '--bucket=gs://$_CACHE_BUCKET'
+    - '--key=$_RUST_SDK_BUILD_CACHE_KEY-$( checksum test/sdk/rust/Cargo.toml )'
+    - '--path=test/sdk/rust/.cargo'
+    - '--path=test/sdk/rust/.cargo-targets'
+    - '--no-clobber'
+  id: rust-build-save-cache
+  waitFor:
+    - sdk-conformance
+
+#
 # Zip up artifacts and push to storage
 #
 
 - name: 'gcr.io/cloud-builders/gsutil'
   waitFor:
-    - build
+    - build-sdks
     - tests
-  dir: "sdks/cpp/.build"
-  args: ['cp', '*.tar.gz', 'gs://agones-artifacts/cpp-sdk']
+  dir: "sdks/cpp/.archives"
+  args: [ '-m', 'cp', '*.tar.gz', 'gs://agones-artifacts/cpp-sdk']
 - name: 'gcr.io/cloud-builders/gsutil'
   waitFor:
-    - build
+    - build-images
     - tests
   dir: "cmd/sdk-server/bin"
-  args: ['cp', '*.zip', 'gs://agones-artifacts/sdk-server']
+  args: [ '-m', 'cp', '*.zip', 'gs://agones-artifacts/sdk-server']
 
 substitutions:
   _CACHE_BUCKET: agones-build-cache
   _HTMLTEST_CACHE_KEY: htmltest-0.10.1
+  _CPP_SDK_BUILD_CACHE_KEY: cpp-sdk-build
+  _RUST_SDK_BUILD_CACHE_KEY: rust-sdk-build
 
 tags: ['ci']
 timeout: "1h"

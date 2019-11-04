@@ -17,10 +17,12 @@ package e2e
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
-	"agones.dev/agones/pkg/apis/stable/v1alpha1"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
+	autoscalingv1 "agones.dev/agones/pkg/apis/autoscaling/v1"
 	e2e "agones.dev/agones/test/e2e/framework"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -43,16 +45,16 @@ var waitForDeletion = &metav1.DeleteOptions{
 func TestAutoscalerBasicFunctions(t *testing.T) {
 	t.Parallel()
 
-	alpha1 := framework.AgonesClient.StableV1alpha1()
-	fleets := alpha1.Fleets(defaultNs)
-	flt, err := fleets.Create(defaultFleet())
+	stable := framework.AgonesClient.AgonesV1()
+	fleets := stable.Fleets(defaultNs)
+	flt, err := fleets.Create(defaultFleet(defaultNs))
 	if assert.Nil(t, err) {
 		defer fleets.Delete(flt.ObjectMeta.Name, nil) // nolint:errcheck
 	}
 
-	framework.WaitForFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas))
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas))
 
-	fleetautoscalers := alpha1.FleetAutoscalers(defaultNs)
+	fleetautoscalers := framework.AgonesClient.AutoscalingV1().FleetAutoscalers(defaultNs)
 	fas, err := fleetautoscalers.Create(defaultFleetAutoscaler(flt))
 	if assert.Nil(t, err) {
 		defer fleetautoscalers.Delete(fas.ObjectMeta.Name, nil) // nolint:errcheck
@@ -64,47 +66,44 @@ func TestAutoscalerBasicFunctions(t *testing.T) {
 
 	// the fleet autoscaler should scale the fleet up now up to BufferSize
 	bufferSize := int32(fas.Spec.Policy.Buffer.BufferSize.IntValue())
-	framework.WaitForFleetCondition(t, flt, e2e.FleetReadyCount(bufferSize))
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(bufferSize))
 
 	// patch the autoscaler to increase MinReplicas and watch the fleet scale up
 	fas, err = patchFleetAutoscaler(fas, intstr.FromInt(int(bufferSize)), bufferSize+2, fas.Spec.Policy.Buffer.MaxReplicas)
 	assert.Nil(t, err, "could not patch fleetautoscaler")
 
 	// min replicas is now higher than buffer size, will scale to that level
-	framework.WaitForFleetCondition(t, flt, e2e.FleetReadyCount(fas.Spec.Policy.Buffer.MinReplicas))
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(fas.Spec.Policy.Buffer.MinReplicas))
 
 	// patch the autoscaler to remove MinReplicas and watch the fleet scale down to bufferSize
 	fas, err = patchFleetAutoscaler(fas, intstr.FromInt(int(bufferSize)), 0, fas.Spec.Policy.Buffer.MaxReplicas)
 	assert.Nil(t, err, "could not patch fleetautoscaler")
 
 	bufferSize = int32(fas.Spec.Policy.Buffer.BufferSize.IntValue())
-	framework.WaitForFleetCondition(t, flt, e2e.FleetReadyCount(bufferSize))
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(bufferSize))
 
 	// do an allocation and watch the fleet scale up
-	fa := getAllocation(flt)
-	fa, err = alpha1.FleetAllocations(defaultNs).Create(fa)
-	assert.Nil(t, err)
-	assert.Equal(t, v1alpha1.GameServerStateAllocated, fa.Status.GameServer.Status.State)
-	framework.WaitForFleetCondition(t, flt, func(fleet *v1alpha1.Fleet) bool {
+	gsa := framework.CreateAndApplyAllocation(t, flt)
+	framework.AssertFleetCondition(t, flt, func(fleet *agonesv1.Fleet) bool {
 		return fleet.Status.AllocatedReplicas == 1
 	})
 
-	framework.WaitForFleetCondition(t, flt, e2e.FleetReadyCount(bufferSize))
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(bufferSize))
 
 	// patch autoscaler to switch to relative buffer size and check if the fleet adjusts
 	_, err = patchFleetAutoscaler(fas, intstr.FromString("10%"), 1, fas.Spec.Policy.Buffer.MaxReplicas)
 	assert.Nil(t, err, "could not patch fleetautoscaler")
 
 	//10% with only one allocated GS means only one ready server
-	framework.WaitForFleetCondition(t, flt, e2e.FleetReadyCount(1))
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(1))
 
 	// get the Status of the fleetautoscaler
-	fas, err = framework.AgonesClient.StableV1alpha1().FleetAutoscalers(fas.ObjectMeta.Namespace).Get(fas.Name, metav1.GetOptions{})
+	fas, err = framework.AgonesClient.AutoscalingV1().FleetAutoscalers(fas.ObjectMeta.Namespace).Get(fas.Name, metav1.GetOptions{})
 	assert.Nil(t, err, "could not get fleetautoscaler")
 	assert.True(t, fas.Status.AbleToScale, "Could not get AbleToScale status")
 
 	// check that we are able to scale
-	framework.WaitForFleetAutoScalerCondition(t, fas, func(fas *v1alpha1.FleetAutoscaler) bool {
+	framework.WaitForFleetAutoScalerCondition(t, fas, func(fas *autoscalingv1.FleetAutoscaler) bool {
 		return !fas.Status.ScalingLimited
 	})
 
@@ -113,15 +112,15 @@ func TestAutoscalerBasicFunctions(t *testing.T) {
 	assert.Nil(t, err, "could not patch fleetautoscaler")
 
 	// check that we are not able to scale
-	framework.WaitForFleetAutoScalerCondition(t, fas, func(fas *v1alpha1.FleetAutoscaler) bool {
+	framework.WaitForFleetAutoScalerCondition(t, fas, func(fas *autoscalingv1.FleetAutoscaler) bool {
 		return fas.Status.ScalingLimited
 	})
 
 	// delete the allocated GameServer and watch the fleet scale down
 	gp := int64(1)
-	err = alpha1.GameServers(defaultNs).Delete(fa.Status.GameServer.ObjectMeta.Name, &metav1.DeleteOptions{GracePeriodSeconds: &gp})
+	err = stable.GameServers(defaultNs).Delete(gsa.Status.GameServerName, &metav1.DeleteOptions{GracePeriodSeconds: &gp})
 	assert.Nil(t, err)
-	framework.WaitForFleetCondition(t, flt, func(fleet *v1alpha1.Fleet) bool {
+	framework.AssertFleetCondition(t, flt, func(fleet *agonesv1.Fleet) bool {
 		return fleet.Status.AllocatedReplicas == 0 &&
 			fleet.Status.ReadyReplicas == 1 &&
 			fleet.Status.Replicas == 1
@@ -134,18 +133,18 @@ func TestAutoscalerBasicFunctions(t *testing.T) {
 func TestAutoscalerStressCreate(t *testing.T) {
 	t.Parallel()
 
-	alpha1 := framework.AgonesClient.StableV1alpha1()
+	alpha1 := framework.AgonesClient.AgonesV1()
 	fleets := alpha1.Fleets(defaultNs)
-	flt, err := fleets.Create(defaultFleet())
+	flt, err := fleets.Create(defaultFleet(defaultNs))
 	if assert.Nil(t, err) {
 		defer fleets.Delete(flt.ObjectMeta.Name, nil) // nolint:errcheck
 	}
 
-	framework.WaitForFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas))
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas))
 
 	r := rand.New(rand.NewSource(1783))
 
-	fleetautoscalers := alpha1.FleetAutoscalers(defaultNs)
+	fleetautoscalers := framework.AgonesClient.AutoscalingV1().FleetAutoscalers(defaultNs)
 
 	for i := 0; i < 5; i++ {
 		fas := defaultFleetAutoscaler(flt)
@@ -181,7 +180,7 @@ func TestAutoscalerStressCreate(t *testing.T) {
 					expectedReplicas = fas.Spec.Policy.Buffer.MaxReplicas
 				}
 				// the fleet autoscaler should scale the fleet now to expectedReplicas
-				framework.WaitForFleetCondition(t, flt, e2e.FleetReadyCount(expectedReplicas))
+				framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(expectedReplicas))
 			} else {
 				assert.False(t, valid,
 					fmt.Sprintf("FleetAutoscaler NOT created even if the parameters are valid: %d %d %d (%s)",
@@ -195,7 +194,7 @@ func TestAutoscalerStressCreate(t *testing.T) {
 
 // scaleFleet creates a patch to apply to a Fleet.
 // easier for testing, as it removes object generational issues.
-func patchFleetAutoscaler(fas *v1alpha1.FleetAutoscaler, bufferSize intstr.IntOrString, minReplicas int32, maxReplicas int32) (*v1alpha1.FleetAutoscaler, error) {
+func patchFleetAutoscaler(fas *autoscalingv1.FleetAutoscaler, bufferSize intstr.IntOrString, minReplicas int32, maxReplicas int32) (*autoscalingv1.FleetAutoscaler, error) {
 	var bufferSizeFmt string
 	if bufferSize.Type == intstr.Int {
 		bufferSizeFmt = fmt.Sprintf("%d", bufferSize.IntValue())
@@ -216,34 +215,24 @@ func patchFleetAutoscaler(fas *v1alpha1.FleetAutoscaler, bufferSize intstr.IntOr
 		WithField("patch", patch).
 		Info("Patching fleetautoscaler")
 
-	fas, err := framework.AgonesClient.StableV1alpha1().FleetAutoscalers(defaultNs).Patch(fas.ObjectMeta.Name, types.JSONPatchType, []byte(patch))
+	fas, err := framework.AgonesClient.AutoscalingV1().FleetAutoscalers(defaultNs).Patch(fas.ObjectMeta.Name, types.JSONPatchType, []byte(patch))
 	logrus.WithField("fleetautoscaler", fas).Info("Patched fleet autoscaler")
 	return fas, err
 }
 
 // defaultFleetAutoscaler returns a default fleet autoscaler configuration for a given fleet
-func defaultFleetAutoscaler(f *v1alpha1.Fleet) *v1alpha1.FleetAutoscaler {
-	return &v1alpha1.FleetAutoscaler{
+func defaultFleetAutoscaler(f *agonesv1.Fleet) *autoscalingv1.FleetAutoscaler {
+	return &autoscalingv1.FleetAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{Name: f.ObjectMeta.Name + "-autoscaler", Namespace: defaultNs},
-		Spec: v1alpha1.FleetAutoscalerSpec{
+		Spec: autoscalingv1.FleetAutoscalerSpec{
 			FleetName: f.ObjectMeta.Name,
-			Policy: v1alpha1.FleetAutoscalerPolicy{
-				Type: v1alpha1.BufferPolicyType,
-				Buffer: &v1alpha1.BufferPolicy{
+			Policy: autoscalingv1.FleetAutoscalerPolicy{
+				Type: autoscalingv1.BufferPolicyType,
+				Buffer: &autoscalingv1.BufferPolicy{
 					BufferSize:  intstr.FromInt(3),
 					MaxReplicas: 10,
 				},
 			},
-		},
-	}
-}
-
-func getAllocation(f *v1alpha1.Fleet) *v1alpha1.FleetAllocation {
-	// get an allocation
-	return &v1alpha1.FleetAllocation{
-		ObjectMeta: metav1.ObjectMeta{GenerateName: "allocation-", Namespace: f.ObjectMeta.Namespace},
-		Spec: v1alpha1.FleetAllocationSpec{
-			FleetName: f.ObjectMeta.Name,
 		},
 	}
 }
@@ -271,9 +260,9 @@ func TestAutoscalerWebhook(t *testing.T) {
 		assert.FailNow(t, "Failed creating webhook service, aborting TestAutoscalerWebhook")
 	}
 
-	alpha1 := framework.AgonesClient.StableV1alpha1()
+	alpha1 := framework.AgonesClient.AgonesV1()
 	fleets := alpha1.Fleets(defaultNs)
-	flt := defaultFleet()
+	flt := defaultFleet(defaultNs)
 	initialReplicasCount := int32(1)
 	flt.Spec.Replicas = initialReplicasCount
 	flt, err = fleets.Create(flt)
@@ -281,14 +270,14 @@ func TestAutoscalerWebhook(t *testing.T) {
 		defer fleets.Delete(flt.ObjectMeta.Name, nil) // nolint:errcheck
 	}
 
-	framework.WaitForFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas))
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas))
 
-	fleetautoscalers := alpha1.FleetAutoscalers(defaultNs)
+	fleetautoscalers := framework.AgonesClient.AutoscalingV1().FleetAutoscalers(defaultNs)
 	fas := defaultFleetAutoscaler(flt)
-	fas.Spec.Policy.Type = v1alpha1.WebhookPolicyType
+	fas.Spec.Policy.Type = autoscalingv1.WebhookPolicyType
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
-	fas.Spec.Policy.Webhook = &v1alpha1.WebhookPolicy{
+	fas.Spec.Policy.Webhook = &autoscalingv1.WebhookPolicy{
 		Service: &admregv1b.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: defaultNs,
@@ -296,42 +285,63 @@ func TestAutoscalerWebhook(t *testing.T) {
 		},
 	}
 	fas, err = fleetautoscalers.Create(fas)
-	if assert.Nil(t, err) {
+	if assert.NoError(t, err) {
 		defer fleetautoscalers.Delete(fas.ObjectMeta.Name, nil) // nolint:errcheck
 	} else {
 		// if we could not create the autoscaler, there is no point going further
 		assert.FailNow(t, "Failed creating autoscaler, aborting TestAutoscalerWebhook")
 	}
-	fa := getAllocation(flt)
-	fa, err = alpha1.FleetAllocations(defaultNs).Create(fa)
-	assert.Nil(t, err)
-	assert.Equal(t, v1alpha1.GameServerStateAllocated, fa.Status.GameServer.Status.State)
-	framework.WaitForFleetCondition(t, flt, func(fleet *v1alpha1.Fleet) bool {
+	framework.CreateAndApplyAllocation(t, flt)
+	framework.AssertFleetCondition(t, flt, func(fleet *agonesv1.Fleet) bool {
 		return fleet.Status.AllocatedReplicas == 1
 	})
 
-	framework.WaitForFleetCondition(t, flt, func(fleet *v1alpha1.Fleet) bool {
+	framework.AssertFleetCondition(t, flt, func(fleet *agonesv1.Fleet) bool {
 		return fleet.Status.Replicas > initialReplicasCount
 	})
 
 	// Cause an error in Webhook config
 	// Use wrong service Path
-	fas, err = fleetautoscalers.Get(fas.ObjectMeta.Name, metav1.GetOptions{})
-	assert.Nil(t, err)
-	newPath := path + "2"
-	fas.Spec.Policy.Webhook.Service.Path = &newPath
-	labels := map[string]string{"fleetautoscaler": "wrong"}
-	fas.ObjectMeta.Labels = labels
-	_, err = fleetautoscalers.Update(fas)
-	assert.Nil(t, err)
-	time.Sleep(1 * time.Second)
-	events := framework.KubeClient.CoreV1().Events(defaultNs)
-	l, err := events.List(metav1.ListOptions{FieldSelector: fields.AndSelectors(fields.OneTermEqualSelector("involvedObject.name", fas.ObjectMeta.Name), fields.OneTermEqualSelector("type", "Warning")).String()})
-	assert.Nil(t, err)
-	assert.NotEqual(t, 0, len(l.Items))
-	for _, v := range l.Items {
-		assert.Contains(t, v.Message, "Error calculating desired fleet size on FleetAutoscaler", "Received unexpected error")
-	}
+	err = wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
+		fas, err = fleetautoscalers.Get(fas.ObjectMeta.Name, metav1.GetOptions{})
+		if err != nil {
+			return true, err
+		}
+		newPath := path + "2"
+		fas.Spec.Policy.Webhook.Service.Path = &newPath
+		labels := map[string]string{"fleetautoscaler": "wrong"}
+		fas.ObjectMeta.Labels = labels
+		_, err = fleetautoscalers.Update(fas)
+		if err != nil {
+			logrus.WithError(err).Warn("could not update fleet autoscaler")
+			return false, nil
+		}
+
+		return true, nil
+	})
+	assert.NoError(t, err)
+
+	var l *corev1.EventList
+	errString := "Error calculating desired fleet size on FleetAutoscaler"
+	found := false
+
+	// Error - net/http: request canceled while waiting for connection (Client.Timeout exceeded
+	// while awaiting headers)
+	err = wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
+		events := framework.KubeClient.CoreV1().Events(defaultNs)
+		l, err = events.List(metav1.ListOptions{FieldSelector: fields.AndSelectors(fields.OneTermEqualSelector("involvedObject.name", fas.ObjectMeta.Name), fields.OneTermEqualSelector("type", "Warning")).String()})
+		if err != nil {
+			return false, err
+		}
+		for _, v := range l.Items {
+			if strings.Contains(v.Message, errString) {
+				found = true
+			}
+		}
+		return found, nil
+	})
+	assert.NoError(t, err, "Received unexpected error")
+	assert.True(t, found, "Expected error was not received")
 }
 
 var webhookKey = `
@@ -464,9 +474,9 @@ func TestTlsWebhook(t *testing.T) {
 		assert.FailNow(t, "Failed creating service, aborting TestTlsWebhook")
 	}
 
-	alpha1 := framework.AgonesClient.StableV1alpha1()
+	alpha1 := framework.AgonesClient.AgonesV1()
 	fleets := alpha1.Fleets(defaultNs)
-	flt := defaultFleet()
+	flt := defaultFleet(defaultNs)
 	initialReplicasCount := int32(1)
 	flt.Spec.Replicas = initialReplicasCount
 	flt, err = fleets.Create(flt.DeepCopy())
@@ -474,15 +484,15 @@ func TestTlsWebhook(t *testing.T) {
 		defer fleets.Delete(flt.ObjectMeta.Name, nil) // nolint:errcheck
 	}
 
-	framework.WaitForFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas))
+	framework.AssertFleetCondition(t, flt, e2e.FleetReadyCount(flt.Spec.Replicas))
 
-	fleetautoscalers := alpha1.FleetAutoscalers(defaultNs)
+	fleetautoscalers := framework.AgonesClient.AutoscalingV1().FleetAutoscalers(defaultNs)
 	fas := defaultFleetAutoscaler(flt)
-	fas.Spec.Policy.Type = v1alpha1.WebhookPolicyType
+	fas.Spec.Policy.Type = autoscalingv1.WebhookPolicyType
 	fas.Spec.Policy.Buffer = nil
 	path := "scale"
 
-	fas.Spec.Policy.Webhook = &v1alpha1.WebhookPolicy{
+	fas.Spec.Policy.Webhook = &autoscalingv1.WebhookPolicy{
 		Service: &admregv1b.ServiceReference{
 			Name:      svc.ObjectMeta.Name,
 			Namespace: defaultNs,
@@ -497,15 +507,12 @@ func TestTlsWebhook(t *testing.T) {
 		// if we could not create the autoscaler, their is no point going further
 		assert.FailNow(t, "Failed creating autoscaler, aborting TestTlsWebhook")
 	}
-	fa := getAllocation(flt)
-	fa, err = alpha1.FleetAllocations(defaultNs).Create(fa.DeepCopy())
-	assert.Nil(t, err)
-	assert.Equal(t, v1alpha1.GameServerStateAllocated, fa.Status.GameServer.Status.State)
-	framework.WaitForFleetCondition(t, flt, func(fleet *v1alpha1.Fleet) bool {
+	framework.CreateAndApplyAllocation(t, flt)
+	framework.AssertFleetCondition(t, flt, func(fleet *agonesv1.Fleet) bool {
 		return fleet.Status.AllocatedReplicas == 1
 	})
 
-	framework.WaitForFleetCondition(t, flt, func(fleet *v1alpha1.Fleet) bool {
+	framework.AssertFleetCondition(t, flt, func(fleet *agonesv1.Fleet) bool {
 		return fleet.Status.Replicas > initialReplicasCount
 	})
 }

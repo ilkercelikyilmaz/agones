@@ -24,13 +24,13 @@
 #
 
 # base version target. This is usually the next release.
-base_version = 0.11.0
+base_version = 1.2.0
 
 # agones image release registry
 release_registry = gcr.io/agones-images
 
 #
-# All of the following can be overwritten with environemt variables
+# All of the following can be overwritten with environment variables
 # or passed through directly when invoking the relevent Make targets
 #
 
@@ -54,10 +54,10 @@ STRESS_TEST_LEVEL ?= 20
 
 # kind cluster name to use
 KIND_PROFILE ?= agones
-KIND_CONTAINER_NAME=kind-$(KIND_PROFILE)-control-plane
+KIND_CONTAINER_NAME=$(KIND_PROFILE)-control-plane
 
 # Game Server image to use while doing end-to-end tests
-GS_TEST_IMAGE ?= gcr.io/agones-images/udp-server:0.9
+GS_TEST_IMAGE ?= gcr.io/agones-images/udp-server:0.17
 
 # Directory that this Makefile is in.
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
@@ -186,6 +186,7 @@ include ./includes/minikube.mk
 include ./includes/kind.mk
 include ./includes/website.mk
 include ./includes/sdk.mk
+include ./includes/allocation.mk
 
 #   _____                    _
 #  |_   _|_ _ _ __ __ _  ___| |_ ___
@@ -222,7 +223,7 @@ push-release-chart: RELEASE_VERSION ?= $(base_version)
 push-release-chart: $(ensure-build-image)
 	rm -rf /tmp/agones $(agones_path)/install/.helm-$(RELEASE_VERSION)/
 	mkdir -p $(agones_path)/install/.helm-$(RELEASE_VERSION)/
-	cd /tmp && git clone --single-branch -b release-$(RELEASE_VERSION) git@github.com:GoogleCloudPlatform/agones.git
+	cd /tmp && git clone --single-branch -b release-$(RELEASE_VERSION) git@github.com:googleforgames/agones.git
 	mv /tmp/agones/install/helm/agones $(agones_path)/install/.helm-$(RELEASE_VERSION)/
 	CHART_DIR=install/.helm-$(RELEASE_VERSION)/agones $(MAKE) push-chart
 
@@ -338,8 +339,12 @@ build-agones-sdk-binary-windows: $(ensure-build-image)
 	$(GO_BUILD_WINDOWS_AMD64) \
 		-o $(go_build_base_path)/cmd/sdk-server/bin/sdk-server.windows.amd64.exe $(go_rebuild_flags) $(go_version_flags) $(agones_package)/cmd/sdk-server
 
-# Build the image for the gameserver sidecar
+# Build the image for the gameserver sidecar and SDK binaries
 build-agones-sdk-image: $(ensure-build-image) build-agones-sdk-binary build-licenses build-required-src-dist
+	docker build $(agones_path)/cmd/sdk-server/ --tag=$(sidecar_tag) $(DOCKER_BUILD_ARGS)
+
+# Build sidecar image only
+build-agones-sdk-server-image: $(ensure-build-image) build-agones-sdk-binary-linux
 	docker build $(agones_path)/cmd/sdk-server/ --tag=$(sidecar_tag) $(DOCKER_BUILD_ARGS)
 
 # Build a static binary for the ping service
@@ -388,18 +393,6 @@ gen-crd-client: $(ensure-build-image)
 	docker run --rm $(common_mounts) -w $(workdir_path) $(build_tag) /root/gen-crd-client.sh
 	docker run --rm $(common_mounts) -w $(workdir_path)/pkg $(build_tag) goimports -w .
 
-site-images: $(site_path)/static/diagrams/gameserver-states.dot.png $(site_path)/static/diagrams/gameserver-lifecycle.puml.png
-
-# generate pngs from dot files
-%.dot.png: %.dot
-	docker run -i --rm $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) bash -c \
-	  'dot -Tpng /dev/stdin' < $< > $@.tmp && mv $@.tmp $@
-
-# general pngs from puml files
-%.puml.png: %.puml
-	docker run -i --rm $(common_mounts) $(DOCKER_RUN_ARGS) $(build_tag) bash -c \
-		'plantuml -pipe' < $< > $@
-
 # Run a bash shell with the developer tools in it. (Creates the image if it doesn't exist)
 # Can use DOCKER_RUN_ARGS for extra arguments.
 shell: $(ensure-build-image)
@@ -439,7 +432,7 @@ setup-grafana: PASSWORD ?= admin
 setup-grafana:
 	$(DOCKER_RUN) kubectl apply -f $(mount_path)/build/grafana/
 	$(DOCKER_RUN) \
-		helm upgrade --install --wait grafana stable/grafana  --namespace metrics \
+		helm upgrade --install --wait grafana stable/grafana --version=3.12.0  --namespace metrics \
 		--set persistence.enabled=$(PVC),server.persistentVolume.size=$(PV_SIZE) \
 		--set adminPassword=$(PASSWORD) -f $(mount_path)/build/grafana.yaml
 

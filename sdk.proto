@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package stable.agones.dev.sdk;
+package agones.dev.sdk;
 option go_package = "sdk";
 
 import "google/api/annotations.proto";
@@ -79,6 +79,14 @@ service SDK {
 			body: "*"
 		};
     }
+
+    // Marks the GameServer as the Reserved state for Duration
+    rpc Reserve(Duration) returns (Empty) {
+        option (google.api.http) = {
+            post: "/reserve"
+            body: "*"
+        };
+    }
 }
 
 // I am Empty
@@ -89,6 +97,11 @@ message Empty {
 message KeyValue {
     string key = 1;
     string value = 2;
+}
+
+// time duration, in seconds
+message Duration {
+    int64 seconds = 1;
 }
 
 // A GameServer Custom Resource Definition object
@@ -118,10 +131,10 @@ message GameServer {
         Health health = 1;
 
         message Health {
-            bool Disabled = 1;
-            int32 PeriodSeconds = 2;
-            int32 FailureThreshold = 3;
-            int32 InitialDelaySeconds = 4;
+            bool disabled = 1;
+            int32 period_seconds = 2;
+            int32 failure_threshold = 3;
+            int32 initial_delay_seconds = 4;
         }
     }
 

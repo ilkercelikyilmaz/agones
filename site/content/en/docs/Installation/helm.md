@@ -16,7 +16,9 @@ description: >
 
 ## Installing the Chart
 
-> If you don't have `Helm` installed locally, or `Tiller` installed in your Kubernetes cluster, read the [Using Helm](https://docs.helm.sh/using_helm/) documentation to get started.
+{{< alert title="Note" color="info">}}
+If you don't have `Helm` installed locally, or `Tiller` installed in your Kubernetes cluster, read the [Using Helm](https://docs.helm.sh/using_helm/) documentation to get started.
+{{< /alert >}}
 
 To install the chart with the release name `my-release` using our stable helm repository:
 
@@ -28,24 +30,19 @@ $ helm install --name my-release --namespace agones-system agones/agones
 _We recommend to install Agones in its own namespaces (like `agones-system` as shown above)
 you can use the helm `--namespace` parameter to specify a different namespace._
 
-When running in production, Agones should be scheduled on a dedicated pool of nodes, distinct from where Game Servers are scheduled for better isolation and resiliency. By default Agones prefers to be scheduled on nodes labeled with `stable.agones.dev/agones-system=true` and tolerates node taint `stable.agones.dev/agones-system=true:NoExecute`. If no dedicated nodes are available, Agones will
-run on regular nodes, but that's not recommended for production use.
-
-As an example, to set up dedicated node pool for Agones on GKE, run the following command before installing Agones. Alternatively you can taint and label nodes manually.
-
- ```
-gcloud container node-pools create agones-system --cluster=... --zone=... \
-  --node-taints stable.agones.dev/agones-system=true:NoExecute \
-  --node-labels stable.agones.dev/agones-system=true \
-  --num-nodes=1
-```
+When running in production, Agones should be scheduled on a dedicated pool of nodes, distinct from where Game Servers are scheduled for better isolation and resiliency. By default Agones prefers to be scheduled on nodes labeled with `agones.dev/agones-system=true` and tolerates node taint `agones.dev/agones-system=true:NoExecute`. If no dedicated nodes are available, Agones will
+run on regular nodes, but that's not recommended for production use. For instructions on setting up a decidated node
+pool for Agones, see the [Agones installation instructions]({{< relref "../_index.md" >}}) for your preferred environment. 
 
 The command deploys Agones on the Kubernetes cluster with the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
 
-> **Tip**: List all releases using `helm list`
+{{< alert title="Tip" color="info">}}
+List all releases using `helm list`
+{{< /alert >}}
 
-
-> If you are installing a development build of Agones (i.e. not the {{< release-version >}} release), you will need to install Agones the following way:
+{{< alert title="Note" color="info">}}
+If you are installing a development build of Agones (i.e. not the {{< release-version >}} release), you will need to install Agones the following way:
+{{< /alert >}}
 
 ```bash
 $ cd install/helm/
@@ -67,7 +64,9 @@ $ kubectl create namespace xbox
 $ helm install --set "gameservers.namespaces={default,xbox}" --namespace agones-system --name my-release agones/agones
 ```
 
-> You need to create your namespaces before installing Agones.
+{{< alert title="Note" color="info">}}
+You need to create your namespaces before installing Agones.
+{{< /alert >}}
 
 If you want to add a new namespace afterward simply upgrade your release:
 
@@ -169,7 +168,7 @@ The following tables lists the configurable parameters of the Agones chart and t
 | `gameservers.minPort`                               | Minimum port to use for dynamic port allocation                                                 | `7000`                 |
 | `gameservers.maxPort`                               | Maximum port to use for dynamic port allocation                                                 | `8000`                 |
 
-{{% feature publishVersion="0.11.0" %}}
+{{% feature publishVersion="1.2.0" %}}
 **New Configuration Features:**
 
 | Parameter                                           | Description                                                                                     | Default                |
@@ -199,14 +198,18 @@ Alternatively, a YAML file that specifies the values for the parameters can be p
 $ helm install --name my-release --namespace agones-system -f values.yaml agones/agones
 ```
 
-> **Tip**: You can use the default {{< ghlink href="install/helm/agones/values.yaml" >}}values.yaml{{< /ghlink >}}
+{{< alert title="Tip" color="info">}}
+You can use the default {{< ghlink href="install/helm/agones/values.yaml" >}}values.yaml{{< /ghlink >}}
+{{< /alert >}}
 
 ## TLS Certificates
 
 By default agones chart generates tls certificates used by the adminission controller, while this is handy, it requires the agones controller to restart on each `helm upgrade` command.
 For most used cases the controller would have required a restart anyway (eg: controller image updated). However if you really need to avoid restarts we suggest that you turn off tls automatic generation (`agones.controller.generateTLS` to `false`) and provide your own certificates (`certs/server.crt`,`certs/server.key`).
 
-> **Tip**: You can use our script located at `cert/cert.sh` to generates them.
+{{< alert title="Tip" color="info">}}
+You can use our script located at `cert/cert.sh` to generates them.
+{{< /alert >}}
 
 ## Confirm Agones is running
 

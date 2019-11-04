@@ -15,12 +15,15 @@
 package sdkserver
 
 import (
+	"fmt"
 	"io"
+	"math/rand"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
-	"agones.dev/agones/pkg/apis/stable/v1alpha1"
+	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	"agones.dev/agones/pkg/sdk"
 	"github.com/fsnotify/fsnotify"
 	"github.com/pkg/errors"
@@ -43,6 +46,14 @@ var (
 			Labels:            map[string]string{"islocal": "true"},
 			Annotations:       map[string]string{"annotation": "true"},
 		},
+		Spec: &sdk.GameServer_Spec{
+			Health: &sdk.GameServer_Spec_Health{
+				Disabled:            false,
+				PeriodSeconds:       3,
+				FailureThreshold:    5,
+				InitialDelaySeconds: 10,
+			},
+		},
 		Status: &sdk.GameServer_Status{
 			State:   "Ready",
 			Address: "127.0.0.1",
@@ -55,10 +66,16 @@ var (
 // is being run for local development, and doesn't connect to the
 // Kubernetes cluster
 type LocalSDKServer struct {
-	gsMutex         sync.RWMutex
-	gs              *sdk.GameServer
-	update          chan struct{}
-	updateObservers sync.Map
+	gsMutex           sync.RWMutex
+	gs                *sdk.GameServer
+	update            chan struct{}
+	updateObservers   sync.Map
+	requestSequence   []string
+	expectedSequence  []string
+	gsState           agonesv1.GameServerState
+	gsReserveDuration *time.Duration
+	reserveTimer      *time.Timer
+	testMode          bool
 }
 
 // NewLocalSDKServer returns the default LocalSDKServer
@@ -68,6 +85,9 @@ func NewLocalSDKServer(filePath string) (*LocalSDKServer, error) {
 		gs:              defaultGs,
 		update:          make(chan struct{}),
 		updateObservers: sync.Map{},
+		requestSequence: make([]string, 0),
+		testMode:        false,
+		gsState:         agonesv1.GameServerStateScheduled,
 	}
 
 	if filePath != "" {
@@ -115,21 +135,95 @@ func NewLocalSDKServer(filePath string) (*LocalSDKServer, error) {
 	return l, nil
 }
 
+// GenerateUID - generate gameserver UID at random for testing
+func (l *LocalSDKServer) GenerateUID() {
+	// Generating Random UID
+	seededRand := rand.New(
+		rand.NewSource(time.Now().UnixNano()))
+	UID := fmt.Sprintf("%d", seededRand.Int())
+	l.gs.ObjectMeta.Uid = UID
+}
+
+// SetTestMode set test mode to collect the sequence of performed requests
+func (l *LocalSDKServer) SetTestMode(testMode bool) {
+	l.testMode = testMode
+}
+
+// SetExpectedSequence set expected request sequence which would be
+// verified against after run was completed
+func (l *LocalSDKServer) SetExpectedSequence(sequence []string) {
+	l.expectedSequence = sequence
+}
+
+// recordRequest append request name to slice
+func (l *LocalSDKServer) recordRequest(request string) {
+	if l.testMode {
+		l.requestSequence = append(l.requestSequence, request)
+	}
+}
+
+// recordRequestWithValue append request name to slice only if
+// value equals to objMetaField: creationTimestamp or UID
+func (l *LocalSDKServer) recordRequestWithValue(request string, value string, objMetaField string) {
+	if l.testMode {
+		fieldVal := ""
+		if objMetaField == "CreationTimestamp" {
+			fieldVal = strconv.FormatInt(l.gs.ObjectMeta.CreationTimestamp, 10)
+		} else if objMetaField == "UID" {
+			fieldVal = l.gs.ObjectMeta.Uid
+		} else {
+			fmt.Printf("Error: Unexpected Field to compare")
+		}
+
+		if value == fieldVal {
+			l.requestSequence = append(l.requestSequence, request)
+		} else {
+			fmt.Printf("Error: we expected to receive '%s' as value for '%s' request but received '%s'. \n", fieldVal, request, value)
+		}
+	}
+}
+
+func (l *LocalSDKServer) updateState(newState agonesv1.GameServerState) {
+	l.gsState = newState
+	l.gs.Status.State = string(l.gsState)
+}
+
 // Ready logs that the Ready request has been received
 func (l *LocalSDKServer) Ready(context.Context, *sdk.Empty) (*sdk.Empty, error) {
 	logrus.Info("Ready request has been received!")
+	l.recordRequest("ready")
+	l.gsMutex.Lock()
+	defer l.gsMutex.Unlock()
+
+	// Follow the GameServer state diagram
+	l.updateState(agonesv1.GameServerStateReady)
+	l.stopReserveTimer()
+	l.update <- struct{}{}
 	return &sdk.Empty{}, nil
 }
 
 // Allocate logs that an allocate request has been received
 func (l *LocalSDKServer) Allocate(context.Context, *sdk.Empty) (*sdk.Empty, error) {
 	logrus.Info("Allocate request has been received!")
+	l.recordRequest("allocate")
+	l.gsMutex.Lock()
+	defer l.gsMutex.Unlock()
+	l.updateState(agonesv1.GameServerStateAllocated)
+	l.stopReserveTimer()
+	l.update <- struct{}{}
+
 	return &sdk.Empty{}, nil
 }
 
 // Shutdown logs that the shutdown request has been received
 func (l *LocalSDKServer) Shutdown(context.Context, *sdk.Empty) (*sdk.Empty, error) {
 	logrus.Info("Shutdown request has been received!")
+	l.recordRequest("shutdown")
+	l.gsMutex.Lock()
+	defer l.gsMutex.Unlock()
+	l.updateState(agonesv1.GameServerStateShutdown)
+	l.stopReserveTimer()
+	l.update <- struct{}{}
 	return &sdk.Empty{}, nil
 }
 
@@ -144,6 +238,7 @@ func (l *LocalSDKServer) Health(stream sdk.SDK_HealthServer) error {
 		if err != nil {
 			return errors.Wrap(err, "Error with Health check")
 		}
+		l.recordRequest("health")
 		logrus.Info("Health Ping Received!")
 	}
 }
@@ -163,6 +258,7 @@ func (l *LocalSDKServer) SetLabel(_ context.Context, kv *sdk.KeyValue) (*sdk.Emp
 
 	l.gs.ObjectMeta.Labels[metadataPrefix+kv.Key] = kv.Value
 	l.update <- struct{}{}
+	l.recordRequestWithValue("setlabel", kv.Value, "CreationTimestamp")
 	return &sdk.Empty{}, nil
 }
 
@@ -181,18 +277,20 @@ func (l *LocalSDKServer) SetAnnotation(_ context.Context, kv *sdk.KeyValue) (*sd
 
 	l.gs.ObjectMeta.Annotations[metadataPrefix+kv.Key] = kv.Value
 	l.update <- struct{}{}
+	l.recordRequestWithValue("setannotation", kv.Value, "UID")
 	return &sdk.Empty{}, nil
 }
 
-// GetGameServer returns a dummy game server.
+// GetGameServer returns current GameServer configuration.
 func (l *LocalSDKServer) GetGameServer(context.Context, *sdk.Empty) (*sdk.GameServer, error) {
 	logrus.Info("getting GameServer details")
+	l.recordRequest("gameserver")
 	l.gsMutex.RLock()
 	defer l.gsMutex.RUnlock()
 	return l.gs, nil
 }
 
-// WatchGameServer will return a dummy GameServer (with no changes), 3 times, every 5 seconds
+// WatchGameServer will return current GameServer configuration, 3 times, every 5 seconds
 func (l *LocalSDKServer) WatchGameServer(_ *sdk.Empty, stream sdk.SDK_WatchGameServerServer) error {
 	logrus.Info("connected to watch GameServer...")
 	observer := make(chan struct{})
@@ -203,6 +301,7 @@ func (l *LocalSDKServer) WatchGameServer(_ *sdk.Empty, stream sdk.SDK_WatchGameS
 
 	l.updateObservers.Store(observer, true)
 
+	l.recordRequest("watch")
 	for range observer {
 		l.gsMutex.RLock()
 		err := stream.Send(l.gs)
@@ -216,12 +315,84 @@ func (l *LocalSDKServer) WatchGameServer(_ *sdk.Empty, stream sdk.SDK_WatchGameS
 	return nil
 }
 
+// Reserve moves this GameServer to the Reserved state for the Duration specified
+func (l *LocalSDKServer) Reserve(ctx context.Context, d *sdk.Duration) (*sdk.Empty, error) {
+	logrus.WithField("duration", d).Info("Reserve request has been received!")
+	l.recordRequest("reserve")
+	l.gsMutex.Lock()
+	defer l.gsMutex.Unlock()
+	if d.Seconds > 0 {
+		duration := time.Duration(d.Seconds) * time.Second
+		l.gsReserveDuration = &duration
+		l.resetReserveAfter(ctx, *l.gsReserveDuration)
+	}
+
+	l.updateState(agonesv1.GameServerStateReserved)
+	l.update <- struct{}{}
+
+	return &sdk.Empty{}, nil
+}
+
+func (l *LocalSDKServer) resetReserveAfter(ctx context.Context, duration time.Duration) {
+	if l.reserveTimer != nil {
+		l.reserveTimer.Stop()
+	}
+
+	l.reserveTimer = time.AfterFunc(duration, func() {
+		if _, err := l.Ready(ctx, &sdk.Empty{}); err != nil {
+			logrus.WithError(err).Error("error returning to Ready after reserved ")
+		}
+	})
+}
+
+func (l *LocalSDKServer) stopReserveTimer() {
+	if l.reserveTimer != nil {
+		l.reserveTimer.Stop()
+	}
+	l.gsReserveDuration = nil
+}
+
 // Close tears down all the things
 func (l *LocalSDKServer) Close() {
 	l.updateObservers.Range(func(observer, _ interface{}) bool {
 		close(observer.(chan struct{}))
 		return true
 	})
+	l.compare()
+}
+
+// EqualSets tells whether a and b contain the same elements.
+// A nil argument is equivalent to an empty slice.
+func EqualSets(a, b []string) bool {
+	aSet := make(map[string]bool)
+	bSet := make(map[string]bool)
+	for _, v := range a {
+		aSet[v] = true
+	}
+	for _, v := range b {
+		if _, ok := aSet[v]; !ok {
+			return false
+		}
+		bSet[v] = true
+	}
+	for _, v := range a {
+		if _, ok := bSet[v]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// Close tears down all the things
+func (l *LocalSDKServer) compare() {
+	logrus.Info(fmt.Sprintf("Compare"))
+
+	if l.testMode {
+		if !EqualSets(l.expectedSequence, l.requestSequence) {
+			logrus.Info(fmt.Sprintf("Testing Failed %v %v", l.expectedSequence, l.requestSequence))
+			os.Exit(1)
+		}
+	}
 }
 
 func (l *LocalSDKServer) setGameServerFromFilePath(filePath string) error {
@@ -234,7 +405,7 @@ func (l *LocalSDKServer) setGameServerFromFilePath(filePath string) error {
 		return err
 	}
 
-	var gs v1alpha1.GameServer
+	var gs agonesv1.GameServer
 	// 4096 is the number of bytes the YAMLOrJSONDecoder goes looking
 	// into the file to determine if it's JSON or YAML
 	// (JSON == has whitespace followed by an open brace).

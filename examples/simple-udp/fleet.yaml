@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: "stable.agones.dev/v1alpha1"
+apiVersion: "agones.dev/v1"
 kind: Fleet
 metadata:
   name: simple-udp
@@ -27,7 +27,7 @@ spec:
         spec:
           containers:
           - name: simple-udp
-            image: gcr.io/agones-images/udp-server:0.9
+            image: gcr.io/agones-images/udp-server:0.17
             resources:
               requests:
                 memory: "64Mi"

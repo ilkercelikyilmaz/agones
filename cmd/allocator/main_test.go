@@ -22,33 +22,38 @@ import (
 	"os"
 	"testing"
 
-	"agones.dev/agones/pkg/apis/allocation/v1alpha1"
-	agonesfake "agones.dev/agones/pkg/client/clientset/versioned/fake"
+	pb "agones.dev/agones/pkg/allocation/go/v1alpha1"
+	allocationv1 "agones.dev/agones/pkg/apis/allocation/v1"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
-	k8stesting "k8s.io/client-go/testing"
 )
 
 func TestAllocateHandler(t *testing.T) {
 	t.Parallel()
 
-	fakeAgones := &agonesfake.Clientset{}
 	h := httpHandler{
-		agonesClient: fakeAgones,
-		namespace:    "default",
+		allocationCallback: func(gsa *allocationv1.GameServerAllocation) (k8sruntime.Object, error) {
+			return &allocationv1.GameServerAllocation{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+				},
+				Status: allocationv1.GameServerAllocationStatus{
+					State: allocationv1.GameServerAllocationContention,
+				},
+			}, nil
+		},
 	}
 
-	fakeAgones.AddReactor("create", "gameserverallocations", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-		return true, &v1alpha1.GameServerAllocation{
-			Status: v1alpha1.GameServerAllocationStatus{
-				State: v1alpha1.GameServerAllocationContention,
-			},
-		}, nil
-	})
-
-	gsa := &v1alpha1.GameServerAllocation{}
-	body, _ := json.Marshal(gsa)
+	request := &pb.AllocationRequest{
+		Namespace: "ns",
+		MultiClusterSetting: &pb.MultiClusterSetting{
+			Enabled: true,
+		},
+	}
+	body, _ := json.Marshal(request)
 	buf := bytes.NewBuffer(body)
 	req, err := http.NewRequest(http.MethodPost, "/", buf)
 	if !assert.Nil(t, err) {
@@ -58,29 +63,25 @@ func TestAllocateHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.allocateHandler(rec, req)
 
-	ret := &v1alpha1.GameServerAllocation{}
+	response := &pb.AllocationResponse{}
 	assert.Equal(t, rec.Code, 200)
 	assert.Equal(t, "application/json", rec.Header()["Content-Type"][0])
-	err = json.Unmarshal(rec.Body.Bytes(), ret)
+	err = json.Unmarshal(rec.Body.Bytes(), response)
 	assert.NoError(t, err)
-	assert.Equal(t, v1alpha1.GameServerAllocationContention, ret.Status.State)
+	assert.Equal(t, pb.AllocationResponse_Contention, response.State)
 }
 
 func TestAllocateHandlerReturnsError(t *testing.T) {
 	t.Parallel()
 
-	fakeAgones := &agonesfake.Clientset{}
 	h := httpHandler{
-		agonesClient: fakeAgones,
-		namespace:    "default",
+		allocationCallback: func(gsa *allocationv1.GameServerAllocation) (k8sruntime.Object, error) {
+			return nil, k8serror.NewBadRequest("error")
+		},
 	}
 
-	fakeAgones.AddReactor("create", "gameserverallocations", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
-		return true, nil, k8serror.NewBadRequest("error")
-	})
-
-	gsa := &v1alpha1.GameServerAllocation{}
-	body, _ := json.Marshal(gsa)
+	request := &pb.AllocationRequest{}
+	body, _ := json.Marshal(request)
 	buf := bytes.NewBuffer(body)
 	req, err := http.NewRequest(http.MethodPost, "/", buf)
 	if !assert.Nil(t, err) {
@@ -91,6 +92,62 @@ func TestAllocateHandlerReturnsError(t *testing.T) {
 	h.allocateHandler(rec, req)
 	assert.Equal(t, rec.Code, 400)
 	assert.Contains(t, rec.Body.String(), "error")
+}
+
+func TestHandlingStatus(t *testing.T) {
+	t.Parallel()
+
+	errorMessage := "GameServerAllocation is invalid"
+	h := httpHandler{
+		allocationCallback: func(gsa *allocationv1.GameServerAllocation) (k8sruntime.Object, error) {
+			return &metav1.Status{
+				Status:  metav1.StatusFailure,
+				Message: errorMessage,
+				Reason:  metav1.StatusReasonInvalid,
+				Details: &metav1.StatusDetails{
+					Kind:  "GameServerAllocation",
+					Group: allocationv1.SchemeGroupVersion.Group,
+				},
+				Code: http.StatusUnprocessableEntity,
+			}, nil
+		},
+	}
+
+	request := &pb.AllocationRequest{}
+	body, _ := json.Marshal(request)
+	buf := bytes.NewBuffer(body)
+	req, err := http.NewRequest(http.MethodPost, "/", buf)
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	rec := httptest.NewRecorder()
+	h.allocateHandler(rec, req)
+	assert.Equal(t, rec.Code, 422)
+	assert.Contains(t, rec.Body.String(), errorMessage)
+}
+
+func TestBadReturnType(t *testing.T) {
+	t.Parallel()
+
+	h := httpHandler{
+		allocationCallback: func(gsa *allocationv1.GameServerAllocation) (k8sruntime.Object, error) {
+			return &corev1.Secret{}, nil
+		},
+	}
+
+	request := &pb.AllocationRequest{}
+	body, _ := json.Marshal(request)
+	buf := bytes.NewBuffer(body)
+	req, err := http.NewRequest(http.MethodPost, "/", buf)
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	rec := httptest.NewRecorder()
+	h.allocateHandler(rec, req)
+	assert.Equal(t, rec.Code, 500)
+	assert.Contains(t, rec.Body.String(), "internal server error")
 }
 
 func TestGettingCaCert(t *testing.T) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2019 Google Inc. All Rights Reserved.
+# Copyright 2019 Google LLC All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,4 +17,4 @@
 set -ex
 
 cd ./sdks/cpp
-make build install archive VERSION=$VERSION
+make build verify install archive VERSION=$VERSION
