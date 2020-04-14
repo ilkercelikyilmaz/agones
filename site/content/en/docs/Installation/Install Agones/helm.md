@@ -243,17 +243,25 @@ The following tables lists the configurable parameters of the Agones chart and t
 | `gameservers.maxPort`                               | Maximum port to use for dynamic port allocation                                                 | `8000`                 |
 | `helm.installTests`                                 | Add an ability to run `helm test agones` to verify the installation                             | `8000`                 |
 
+<<<<<<< HEAD
 {{% feature publishVersion="1.10.0" %}}
+=======
+{{% feature publishVersion="1.6.0" %}}
+>>>>>>> a5e1e34b (Release 1.5.0 (#1473))
 **New Configuration Features:**
 
 | Parameter                                           | Description                                                                                     | Default                |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------- |
+<<<<<<< HEAD
 | `agones.allocator.allocationTimeout`                | Remote allocation call timeout.                                      | `10s`                  |
 | `agones.allocator.remoteAllocationTimeout`          | Total remote allocation timeout including retries.       | `30s`                |
 | `agones.controller.annotations`                     | [Annotations][annotations] added to the Agones controller pods                                  | `{}`                   |
 | `agones.allocator.annotations`                      | [Annotations][annotations] added to the Agones allocator pods                                   | `{}`                   |
 | `agones.ping.annotations`                           | [Annotations][annotations] added to the Agones ping pods                                        | `{}`                   |
 |                                                     |                                                                                                 |                        |
+=======
+
+>>>>>>> a5e1e34b (Release 1.5.0 (#1473))
 {{% /feature %}}
 
 [toleration]: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/

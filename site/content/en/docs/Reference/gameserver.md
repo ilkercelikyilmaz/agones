@@ -120,8 +120,12 @@ The `spec` field is the actual GameServer specification and it is composed as fo
     - "Error" The SDK server will only output error messages
   - `grpcPort` the port that the SDK Server binds to for gRPC connections
   - `httpPort` the port that the SDK Server binds to for HTTP gRPC gateway connections
+<<<<<<< HEAD
 - `players` (Alpha, behind "PlayerTracking" feature gate), sets this GameServer's initial player capacity
 - `template` the [pod spec template](https://v1-16.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#podtemplatespec-v1-core) to run your GameServer containers, [see](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/#pod-templates) for more information.
+=======
+- `template` the [pod spec template](https://v1-14.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.14/#podtemplatespec-v1-core) to run your GameServer containers, [see](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/#pod-templates) for more information.
+>>>>>>> a5e1e34b (Release 1.5.0 (#1473))
 
 ## GameServer State Diagram
 
