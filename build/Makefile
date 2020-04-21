@@ -61,6 +61,8 @@ GS_TEST_IMAGE ?= gcr.io/agones-images/simple-game-server:0.1
 
 ALPHA_FEATURE_GATES ?= "PlayerTracking=true&SDKWatchSendOnExecute=true&RollingUpdateOnReady=true"
 
+ALL_FEATURE_GATES ?= "PlayerTracking=true&ContainerPortAllocation=true"
+
 # Directory that this Makefile is in.
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 build_path := $(dir $(mkfile_path))
@@ -246,17 +248,25 @@ test-e2e:
 	$(MAKE) test-e2e-integration
 	$(MAKE) test-e2e-failure
 
+<<<<<<< HEAD
 
 # If GAMESERVERS_NAMESPACE is empty - random namespace will be created
 test-e2e-integration: FEATURE_GATES ?= $(ALPHA_FEATURE_GATES)
 test-e2e-integration: GAMESERVERS_NAMESPACE ?= ""
+=======
+test-e2e-integration: FEATURE_GATES ?= $(ALL_FEATURE_GATES)
+>>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
 test-e2e-integration: $(ensure-build-image)
 	echo "Starting e2e integration test!"
 	$(GO_TEST) $(ARGS) $(agones_package)/test/e2e $(GO_E2E_TEST_ARGS) \
 		--gameserver-image=$(GS_TEST_IMAGE) \
 		--pullsecret=$(IMAGE_PULL_SECRET) \
+<<<<<<< HEAD
 		--feature-gates=$(FEATURE_GATES) \
 		--namespace=$(GAMESERVERS_NAMESPACE)
+=======
+		--feature-gates=$(FEATURE_GATES)
+>>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
 	echo "Finishing e2e integration test!"
 
 test-e2e-failure: $(ensure-build-image)
@@ -298,7 +308,11 @@ install: PING_SERVICE_TYPE := "LoadBalancer"
 install: ALLOCATOR_SERVICE_TYPE := "LoadBalancer"
 install: CRD_CLEANUP := true
 install: LOG_LEVEL := "debug"
+<<<<<<< HEAD
 install: FEATURE_GATES ?= $(ALPHA_FEATURE_GATES)
+=======
+install: FEATURE_GATES ?= $(ALL_FEATURE_GATES)
+>>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
 install: $(ensure-build-image) install-custom-pull-secret
 	$(DOCKER_RUN) \
 		helm upgrade --install --wait --namespace=agones-system \

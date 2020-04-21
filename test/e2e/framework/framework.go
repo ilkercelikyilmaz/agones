@@ -132,7 +132,10 @@ const (
 	stressTestLevelFlag = "stress"
 	perfOutputDirFlag   = "perf-output"
 	versionFlag         = "version"
+<<<<<<< HEAD
 	namespaceFlag       = "namespace"
+=======
+>>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
 )
 
 // ParseTestFlags Parses go test flags separately because pflag package ignores flags with '-test.' prefix
@@ -140,6 +143,7 @@ const (
 // https://github.com/spf13/pflag/issues/63
 // https://github.com/spf13/pflag/issues/238
 func ParseTestFlags() error {
+<<<<<<< HEAD
 	// if we have a "___" in the arguments path, then this is IntelliJ running the test, so ignore this, as otherwise
 	// it breaks.
 	if strings.Contains(os.Args[0], "___") {
@@ -147,6 +151,8 @@ func ParseTestFlags() error {
 		return nil
 	}
 
+=======
+>>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
 	var testFlags []string
 	for _, f := range os.Args[1:] {
 		if strings.HasPrefix(f, "-test.") {
@@ -198,6 +204,7 @@ func NewFromFlags() (*Framework, error) {
 	if err != nil {
 		return framework, err
 	}
+<<<<<<< HEAD
 	framework.GameServerImage = viper.GetString(gsimageFlag)
 	framework.PullSecret = viper.GetString(pullSecretFlag)
 	framework.StressTestLevel = viper.GetInt(stressTestLevelFlag)
@@ -213,6 +220,13 @@ func NewFromFlags() (*Framework, error) {
 		WithField("namespace", framework.Namespace).
 		WithField("featureGates", runtime.EncodeFeatures()).
 		Info("Starting e2e test(s)")
+=======
+	framework.GameServerImage = *gsimage
+	framework.PullSecret = *pullSecret
+	framework.StressTestLevel = *stressTestLevel
+	framework.PerfOutputDir = *perfOutputDir
+	framework.Version = *version
+>>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
 
 	return framework, nil
 }

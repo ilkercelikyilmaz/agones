@@ -21,11 +21,16 @@ import (
 	"time"
 
 	e2eframework "agones.dev/agones/test/e2e/framework"
+<<<<<<< HEAD
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+=======
+	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
+>>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
 )
 
 var framework *e2eframework.Framework
@@ -52,9 +57,16 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+<<<<<<< HEAD
 	if err = cleanupNamespaces(framework); err != nil {
 		log.WithError(err).Error("failed to cleanup e2e namespaces")
 		os.Exit(1)
+=======
+	// run cleanup before tests, to ensure no resources from previous runs exist.
+	err = framework.CleanUp(defaultNs)
+	if err != nil {
+		log.WithError(err).Error("failed to cleanup resources")
+>>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
 	}
 
 	if framework.Namespace == "" {
@@ -80,6 +92,7 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			log.WithError(err).Error("failed to cleanup resources")
 		}
+<<<<<<< HEAD
 
 		defer func() {
 			err = framework.CleanUp(framework.Namespace)
@@ -116,4 +129,10 @@ func cleanupNamespaces(framework *e2eframework.Framework) error {
 	}
 
 	return nil
+=======
+		os.Exit(exitCode)
+	}()
+
+	exitCode = m.Run()
+>>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
 }
