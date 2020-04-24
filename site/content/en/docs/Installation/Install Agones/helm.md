@@ -295,12 +295,16 @@ $ helm install my-release --namespace agones-system -f values.yaml agones/agones
 You can use the default {{< ghlink href="install/helm/agones/values.yaml" >}}values.yaml{{< /ghlink >}}
 {{< /alert >}}
 
+<<<<<<< HEAD
 ## Helm test
 
 {{< alert title="Tip" color="info">}}
 In order to use `helm test` command described in this section you need to set `helm.installTests` helm parameter to `true`.
 {{< /alert >}}
 
+=======
+{{% feature publishVersion="1.6.0" %}}
+>>>>>>> 91a82d2e (Add a simple helm test (#1449))
 Check the Agones installation by running the following command:
 ```bash
 $ helm test my-release --cleanup                     
@@ -317,9 +321,17 @@ RUNNING: agones-test
 ERROR: pods "agones-test" already exists
 Error: 1 test(s) failed
 ```
+<<<<<<< HEAD
 That means that you skipped the `--cleanup` flag and you should either delete the `agones-test` pod manually or run with the same test `helm test my-release --cleanup` two more times.
 {{< /alert >}}
 
+=======
+That mean that you skiped `--cleanup` flag and you should either delete `agones-test` pod manually or run with the same test `helm test my-release --cleanup` two more times.
+{{< /alert >}}
+
+{{% /feature %}}
+
+>>>>>>> 91a82d2e (Add a simple helm test (#1449))
 ## TLS Certificates
 
 By default agones chart generates tls certificates used by the admission controller, while this is handy, it requires the agones controller to restart on each `helm upgrade` command.

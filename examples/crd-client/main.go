@@ -36,7 +36,15 @@ const (
 	isHelmTest           = "IS_HELM_TEST"
 	gameserversNamespace = "GAMESERVERS_NAMESPACE"
 
+<<<<<<< HEAD
 	defaultNs = "default"
+=======
+<<<<<<< HEAD
+	defaultImage = "gcr.io/agones-images/udp-server:0.18"
+=======
+	defaultNs = "default"
+>>>>>>> 4ebd3b0e (Add a simple helm test (#1449))
+>>>>>>> 91a82d2e (Add a simple helm test (#1449))
 )
 
 func main() {

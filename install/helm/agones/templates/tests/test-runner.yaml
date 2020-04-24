@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 {{- if .Values.helm.installTests }}
+=======
+>>>>>>> 91a82d2e (Add a simple helm test (#1449))
 # Copyright 2020 Google LLC All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,10 +32,17 @@ spec:
     imagePullPolicy: Always
     env:
     - name: GAMESERVER_IMAGE
+<<<<<<< HEAD
       value: "gcr.io/agones-images/udp-server:0.21"
+=======
+      value: "gcr.io/agones-images/udp-server:0.19"
+>>>>>>> 91a82d2e (Add a simple helm test (#1449))
     - name: IS_HELM_TEST
       value: "true"
     - name: GAMESERVERS_NAMESPACE
       value: "{{ index .Values.gameservers.namespaces 0 }}"
   restartPolicy: Never
+<<<<<<< HEAD
 {{- end }}
+=======
+>>>>>>> 91a82d2e (Add a simple helm test (#1449))
