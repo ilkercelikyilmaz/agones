@@ -144,6 +144,9 @@ const (
 // https://github.com/spf13/pflag/issues/238
 func ParseTestFlags() error {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 40103599 (Be able to run individual e2e tests in Intellij (#1506))
 	// if we have a "___" in the arguments path, then this is IntelliJ running the test, so ignore this, as otherwise
 	// it breaks.
 	if strings.Contains(os.Args[0], "___") {
@@ -151,8 +154,11 @@ func ParseTestFlags() error {
 		return nil
 	}
 
+<<<<<<< HEAD
 =======
 >>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
+=======
+>>>>>>> 40103599 (Be able to run individual e2e tests in Intellij (#1506))
 	var testFlags []string
 	for _, f := range os.Args[1:] {
 		if strings.HasPrefix(f, "-test.") {
@@ -164,6 +170,7 @@ func ParseTestFlags() error {
 
 // NewFromFlags sets up the testing framework with the standard command line flags.
 func NewFromFlags() (*Framework, error) {
+<<<<<<< HEAD
 	usr, err := user.Current()
 	if err != nil {
 		return nil, err
@@ -201,6 +208,21 @@ func NewFromFlags() (*Framework, error) {
 	runtime.Must(runtime.ParseFeaturesFromEnv())
 
 	framework, err := New(viper.GetString(kubeconfigFlag))
+=======
+	usr, _ := user.Current()
+	kubeconfig := flag.String("kubeconfig", filepath.Join(usr.HomeDir, "/.kube/config"),
+		"kube config path, e.g. $HOME/.kube/config")
+	gsimage := flag.String("gameserver-image", "gcr.io/agones-images/udp-server:0.18",
+		"gameserver image to use for those tests, gcr.io/agones-images/udp-server:0.18")
+	pullSecret := flag.String("pullsecret", "",
+		"optional secret to be used for pulling the gameserver and/or Agones SDK sidecar images")
+	stressTestLevel := flag.Int("stress", 0, "enable stress test at given level 0-100")
+	perfOutputDir := flag.String("perf-output", "", "write performance statistics to the specified directory")
+	version := flag.String("version", "", "agones controller version to be tested, consists of release version plus a short hash of the latest commit")
+
+	flag.Parse()
+	framework, err := New(*kubeconfig)
+>>>>>>> 40103599 (Be able to run individual e2e tests in Intellij (#1506))
 	if err != nil {
 		return framework, err
 	}
@@ -227,6 +249,14 @@ func NewFromFlags() (*Framework, error) {
 	framework.PerfOutputDir = *perfOutputDir
 	framework.Version = *version
 >>>>>>> ba8cd737 (Pass FEATURE_GATES flag to e2e tests (#1445))
+
+	logrus.WithField("gameServerImage", framework.GameServerImage).
+		WithField("pullSecret", framework.PullSecret).
+		WithField("stressTestLevel", framework.StressTestLevel).
+		WithField("perfOutputDir", framework.PerfOutputDir).
+		WithField("version", framework.Version).
+		WithField("featureGates", runtime.EncodeFeatures()).
+		Info("Starting e2e test(s)")
 
 	return framework, nil
 }
