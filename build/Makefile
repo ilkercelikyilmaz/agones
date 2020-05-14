@@ -57,9 +57,13 @@ KIND_PROFILE ?= agones
 KIND_CONTAINER_NAME=$(KIND_PROFILE)-control-plane
 
 # Game Server image to use while doing end-to-end tests
+<<<<<<< HEAD
 GS_TEST_IMAGE ?= gcr.io/agones-images/simple-game-server:0.1
 
 ALPHA_FEATURE_GATES ?= "PlayerTracking=true&SDKWatchSendOnExecute=true&RollingUpdateOnReady=true"
+=======
+GS_TEST_IMAGE ?= gcr.io/agones-images/udp-server:0.20
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 
 ALL_FEATURE_GATES ?= "PlayerTracking=true&ContainerPortAllocation=true"
 

@@ -217,7 +217,11 @@ func readWriteLoop(conn net.PacketConn, stop chan struct{}, s *sdk.SDK) {
 				continue
 			case 2:
 				if cap, err := strconv.Atoi(parts[1]); err != nil {
+<<<<<<< HEAD
 					respond(conn, sender, fmt.Sprintf("ERROR: %s\n", err))
+=======
+					respond(conn, sender, err.Error()+"\n")
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 					continue
 				} else {
 					setPlayerCapacity(s, int64(cap))

@@ -171,18 +171,27 @@ func ParseTestFlags() error {
 // NewFromFlags sets up the testing framework with the standard command line flags.
 func NewFromFlags() (*Framework, error) {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 	usr, err := user.Current()
 	if err != nil {
 		return nil, err
 	}
 
+<<<<<<< HEAD
 	viper.SetDefault(kubeconfigFlag, filepath.Join(usr.HomeDir, ".kube", "config"))
 	viper.SetDefault(gsimageFlag, "gcr.io/agones-images/simple-game-server:0.1")
+=======
+	viper.SetDefault(kubeconfigFlag, filepath.Join(usr.HomeDir, "/.kube/config"))
+	viper.SetDefault(gsimageFlag, "gcr.io/agones-images/udp-server:0.20")
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 	viper.SetDefault(pullSecretFlag, "")
 	viper.SetDefault(stressTestLevelFlag, 0)
 	viper.SetDefault(perfOutputDirFlag, "")
 	viper.SetDefault(versionFlag, "")
 	viper.SetDefault(runtime.FeatureGateFlag, "")
+<<<<<<< HEAD
 	viper.SetDefault(namespaceFlag, "")
 
 	pflag.String(kubeconfigFlag, viper.GetString(kubeconfigFlag), "kube config path, e.g. $HOME/.kube/config")
@@ -192,6 +201,15 @@ func NewFromFlags() (*Framework, error) {
 	pflag.String(perfOutputDirFlag, viper.GetString(perfOutputDirFlag), "write performance statistics to the specified directory")
 	pflag.String(versionFlag, viper.GetString(versionFlag), "agones controller version to be tested, consists of release version plus a short hash of the latest commit")
 	pflag.String(namespaceFlag, viper.GetString(namespaceFlag), "namespace is used to isolate test runs to their own namespaces")
+=======
+
+	kubeconfig := pflag.String(kubeconfigFlag, viper.GetString(kubeconfigFlag), "kube config path, e.g. $HOME/.kube/config")
+	gsimage := pflag.String(gsimageFlag, viper.GetString(gsimageFlag), "gameserver image to use for those tests, gcr.io/agones-images/udp-server:0.20")
+	pullSecret := pflag.String(pullSecretFlag, viper.GetString(pullSecretFlag), "optional secret to be used for pulling the gameserver and/or Agones SDK sidecar images")
+	stressTestLevel := pflag.Int(stressTestLevelFlag, viper.GetInt(stressTestLevelFlag), "enable stress test at given level 0-100")
+	perfOutputDir := pflag.String(perfOutputDirFlag, viper.GetString(perfOutputDirFlag), "write performance statistics to the specified directory")
+	version := pflag.String(versionFlag, viper.GetString(versionFlag), "agones controller version to be tested, consists of release version plus a short hash of the latest commit")
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 	runtime.FeaturesBindFlags()
 	pflag.Parse()
 
@@ -202,11 +220,15 @@ func NewFromFlags() (*Framework, error) {
 	runtime.Must(viper.BindEnv(stressTestLevelFlag))
 	runtime.Must(viper.BindEnv(perfOutputDirFlag))
 	runtime.Must(viper.BindEnv(versionFlag))
+<<<<<<< HEAD
 	runtime.Must(viper.BindEnv(namespaceFlag))
+=======
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 	runtime.Must(viper.BindPFlags(pflag.CommandLine))
 	runtime.Must(runtime.FeaturesBindEnv())
 	runtime.Must(runtime.ParseFeaturesFromEnv())
 
+<<<<<<< HEAD
 	framework, err := New(viper.GetString(kubeconfigFlag))
 =======
 	usr, _ := user.Current()
@@ -221,6 +243,8 @@ func NewFromFlags() (*Framework, error) {
 	version := flag.String("version", "", "agones controller version to be tested, consists of release version plus a short hash of the latest commit")
 
 	flag.Parse()
+=======
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 	framework, err := New(*kubeconfig)
 >>>>>>> 40103599 (Be able to run individual e2e tests in Intellij (#1506))
 	if err != nil {

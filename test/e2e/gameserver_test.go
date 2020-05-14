@@ -787,8 +787,13 @@ func TestGameServerSetPlayerCapacity(t *testing.T) {
 	t.Parallel()
 
 	t.Run("no initial capacity set", func(t *testing.T) {
+<<<<<<< HEAD
 		gs := framework.DefaultGameServer(framework.Namespace)
 		gs, err := framework.CreateGameServerAndWaitUntilReady(framework.Namespace, gs)
+=======
+		gs := framework.DefaultGameServer(defaultNs)
+		gs, err := framework.CreateGameServerAndWaitUntilReady(defaultNs, gs)
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 		if err != nil {
 			t.Fatalf("Could not get a GameServer ready: %v", err)
 		}
@@ -796,9 +801,13 @@ func TestGameServerSetPlayerCapacity(t *testing.T) {
 		assert.Equal(t, int64(0), gs.Status.Players.Capacity)
 
 		reply, err := e2eframework.SendGameServerUDP(gs, "PLAYER_CAPACITY")
+<<<<<<< HEAD
 		if err != nil {
 			t.Fatalf("Could not message GameServer: %v", err)
 		}
+=======
+		assert.NoError(t, err)
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 		assert.Equal(t, "0\n", reply)
 
 		reply, err = e2eframework.SendGameServerUDP(gs, "PLAYER_CAPACITY 20")
@@ -808,6 +817,7 @@ func TestGameServerSetPlayerCapacity(t *testing.T) {
 		assert.Equal(t, "ACK: PLAYER_CAPACITY 20\n", reply)
 
 		reply, err = e2eframework.SendGameServerUDP(gs, "PLAYER_CAPACITY")
+<<<<<<< HEAD
 		if err != nil {
 			t.Fatalf("Could not message GameServer: %v", err)
 		}
@@ -815,6 +825,13 @@ func TestGameServerSetPlayerCapacity(t *testing.T) {
 
 		err = wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
 			gs, err := framework.AgonesClient.AgonesV1().GameServers(framework.Namespace).Get(gs.ObjectMeta.Name, metav1.GetOptions{})
+=======
+		assert.NoError(t, err)
+		assert.Equal(t, "20\n", reply)
+
+		err = wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
+			gs, err := framework.AgonesClient.AgonesV1().GameServers(defaultNs).Get(gs.ObjectMeta.Name, metav1.GetOptions{})
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 			if err != nil {
 				return false, err
 			}
@@ -824,9 +841,15 @@ func TestGameServerSetPlayerCapacity(t *testing.T) {
 	})
 
 	t.Run("initial capacity set", func(t *testing.T) {
+<<<<<<< HEAD
 		gs := framework.DefaultGameServer(framework.Namespace)
 		gs.Spec.Players = &agonesv1.PlayersSpec{InitialCapacity: 10}
 		gs, err := framework.CreateGameServerAndWaitUntilReady(framework.Namespace, gs)
+=======
+		gs := framework.DefaultGameServer(defaultNs)
+		gs.Spec.Players = &agonesv1.PlayersSpec{InitialCapacity: 10}
+		gs, err := framework.CreateGameServerAndWaitUntilReady(defaultNs, gs)
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 		if err != nil {
 			t.Fatalf("Could not get a GameServer ready: %v", err)
 		}
@@ -834,9 +857,13 @@ func TestGameServerSetPlayerCapacity(t *testing.T) {
 		assert.Equal(t, int64(10), gs.Status.Players.Capacity)
 
 		reply, err := e2eframework.SendGameServerUDP(gs, "PLAYER_CAPACITY")
+<<<<<<< HEAD
 		if err != nil {
 			t.Fatalf("Could not message GameServer: %v", err)
 		}
+=======
+		assert.NoError(t, err)
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 		assert.Equal(t, "10\n", reply)
 
 		reply, err = e2eframework.SendGameServerUDP(gs, "PLAYER_CAPACITY 20")
@@ -846,6 +873,7 @@ func TestGameServerSetPlayerCapacity(t *testing.T) {
 		assert.Equal(t, "ACK: PLAYER_CAPACITY 20\n", reply)
 
 		reply, err = e2eframework.SendGameServerUDP(gs, "PLAYER_CAPACITY")
+<<<<<<< HEAD
 		if err != nil {
 			t.Fatalf("Could not message GameServer: %v", err)
 		}
@@ -853,6 +881,13 @@ func TestGameServerSetPlayerCapacity(t *testing.T) {
 
 		err = wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
 			gs, err := framework.AgonesClient.AgonesV1().GameServers(framework.Namespace).Get(gs.ObjectMeta.Name, metav1.GetOptions{})
+=======
+		assert.NoError(t, err)
+		assert.Equal(t, "20\n", reply)
+
+		err = wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
+			gs, err := framework.AgonesClient.AgonesV1().GameServers(defaultNs).Get(gs.ObjectMeta.Name, metav1.GetOptions{})
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 			if err != nil {
 				return false, err
 			}
@@ -870,10 +905,17 @@ func TestPlayerConnectAndDisconnect(t *testing.T) {
 	}
 	t.Parallel()
 
+<<<<<<< HEAD
 	gs := framework.DefaultGameServer(framework.Namespace)
 	playerCount := int64(3)
 	gs.Spec.Players = &agonesv1.PlayersSpec{InitialCapacity: playerCount}
 	gs, err := framework.CreateGameServerAndWaitUntilReady(framework.Namespace, gs)
+=======
+	gs := framework.DefaultGameServer(defaultNs)
+	playerCount := int64(3)
+	gs.Spec.Players = &agonesv1.PlayersSpec{InitialCapacity: playerCount}
+	gs, err := framework.CreateGameServerAndWaitUntilReady(defaultNs, gs)
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 	if err != nil {
 		t.Fatalf("Could not get a GameServer ready: %v", err)
 	}
@@ -894,6 +936,7 @@ func TestPlayerConnectAndDisconnect(t *testing.T) {
 	// deliberately do this before polling, to test the SDK returning the correct
 	// results before it is committed to the GameServer resource.
 	reply, err := e2eframework.SendGameServerUDP(gs, "PLAYER_CONNECTED 1")
+<<<<<<< HEAD
 	if err != nil {
 		t.Fatalf("Could not message GameServer: %v", err)
 	}
@@ -913,6 +956,21 @@ func TestPlayerConnectAndDisconnect(t *testing.T) {
 
 	err = wait.Poll(time.Second, time.Minute, func() (bool, error) {
 		gs, err = framework.AgonesClient.AgonesV1().GameServers(framework.Namespace).Get(gs.ObjectMeta.Name, metav1.GetOptions{})
+=======
+	assert.NoError(t, err)
+	assert.Equal(t, "true\n", reply)
+
+	reply, err = e2eframework.SendGameServerUDP(gs, "GET_PLAYERS")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{"1", "2", "3"}, strings.Split(strings.TrimSpace(reply), ","))
+
+	reply, err = e2eframework.SendGameServerUDP(gs, "PLAYER_COUNT")
+	assert.NoError(t, err)
+	assert.Equal(t, "3\n", reply)
+
+	err = wait.Poll(time.Second, time.Minute, func() (bool, error) {
+		gs, err = framework.AgonesClient.AgonesV1().GameServers(defaultNs).Get(gs.ObjectMeta.Name, metav1.GetOptions{})
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 		if err != nil {
 			return false, err
 		}
@@ -930,6 +988,7 @@ func TestPlayerConnectAndDisconnect(t *testing.T) {
 	assert.Equal(t, "ACK: PLAYER_DISCONNECT 2\n", reply)
 
 	reply, err = e2eframework.SendGameServerUDP(gs, "PLAYER_CONNECTED 2")
+<<<<<<< HEAD
 	if err != nil {
 		t.Fatalf("Could not message GameServer: %v", err)
 	}
@@ -949,6 +1008,21 @@ func TestPlayerConnectAndDisconnect(t *testing.T) {
 
 	err = wait.Poll(time.Second, time.Minute, func() (bool, error) {
 		gs, err = framework.AgonesClient.AgonesV1().GameServers(framework.Namespace).Get(gs.ObjectMeta.Name, metav1.GetOptions{})
+=======
+	assert.NoError(t, err)
+	assert.Equal(t, "false\n", reply)
+
+	reply, err = e2eframework.SendGameServerUDP(gs, "GET_PLAYERS")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{"1", "3"}, strings.Split(strings.TrimSpace(reply), ","))
+
+	reply, err = e2eframework.SendGameServerUDP(gs, "PLAYER_COUNT")
+	assert.NoError(t, err)
+	assert.Equal(t, "2\n", reply)
+
+	err = wait.Poll(time.Second, time.Minute, func() (bool, error) {
+		gs, err = framework.AgonesClient.AgonesV1().GameServers(defaultNs).Get(gs.ObjectMeta.Name, metav1.GetOptions{})
+>>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 		if err != nil {
 			return false, err
 		}
