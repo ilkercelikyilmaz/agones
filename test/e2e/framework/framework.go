@@ -184,8 +184,12 @@ func NewFromFlags() (*Framework, error) {
 	viper.SetDefault(gsimageFlag, "gcr.io/agones-images/simple-game-server:0.1")
 =======
 	viper.SetDefault(kubeconfigFlag, filepath.Join(usr.HomeDir, "/.kube/config"))
+<<<<<<< HEAD
 	viper.SetDefault(gsimageFlag, "gcr.io/agones-images/udp-server:0.20")
 >>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
+=======
+	viper.SetDefault(gsimageFlag, "gcr.io/agones-images/udp-server:0.21")
+>>>>>>> 8bdc911b (Flaky: TestGameServerReserve (#1565))
 	viper.SetDefault(pullSecretFlag, "")
 	viper.SetDefault(stressTestLevelFlag, 0)
 	viper.SetDefault(perfOutputDirFlag, "")
@@ -204,7 +208,7 @@ func NewFromFlags() (*Framework, error) {
 =======
 
 	kubeconfig := pflag.String(kubeconfigFlag, viper.GetString(kubeconfigFlag), "kube config path, e.g. $HOME/.kube/config")
-	gsimage := pflag.String(gsimageFlag, viper.GetString(gsimageFlag), "gameserver image to use for those tests, gcr.io/agones-images/udp-server:0.20")
+	gsimage := pflag.String(gsimageFlag, viper.GetString(gsimageFlag), "gameserver image to use for those tests, gcr.io/agones-images/udp-server:0.21")
 	pullSecret := pflag.String(pullSecretFlag, viper.GetString(pullSecretFlag), "optional secret to be used for pulling the gameserver and/or Agones SDK sidecar images")
 	stressTestLevel := pflag.Int(stressTestLevelFlag, viper.GetInt(stressTestLevelFlag), "enable stress test at given level 0-100")
 	perfOutputDir := pflag.String(perfOutputDirFlag, viper.GetString(perfOutputDirFlag), "write performance statistics to the specified directory")

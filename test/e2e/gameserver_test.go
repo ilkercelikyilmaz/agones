@@ -574,6 +574,18 @@ func TestGameServerWithPortsMappedToMultipleContainers(t *testing.T) {
 
 func TestGameServerReserve(t *testing.T) {
 	t.Parallel()
+<<<<<<< HEAD
+=======
+
+	// We are deliberately not trying to test the transition between Reserved -> Ready.
+	//
+	// We have found that trying to catch the GameServer in the Reserved state can be flaky,
+	// as we can't control the speed in which the Kubernetes API is going to reply to request,
+	// and we could sometimes miss when the GameServer is in the Reserved State before it goes to Ready.
+	//
+	// Therefore we are going to test for concrete states that we don't need to catch while
+	// in a transitive state.
+>>>>>>> 8bdc911b (Flaky: TestGameServerReserve (#1565))
 
 	// We are deliberately not trying to test the transition between Reserved -> Ready.
 	//
@@ -593,12 +605,18 @@ func TestGameServerReserve(t *testing.T) {
 	assert.Equal(t, gs.Status.State, agonesv1.GameServerStateReady)
 
 	reply, err := e2eframework.SendGameServerUDP(gs, "RESERVE 0")
+<<<<<<< HEAD
 	if err != nil {
 		assert.FailNow(t, "Could not message GameServer", err.Error())
+=======
+	if !assert.NoError(t, err) {
+		assert.FailNow(t, "Could not message GameServer")
+>>>>>>> 8bdc911b (Flaky: TestGameServerReserve (#1565))
 	}
 	assert.Equal(t, "ACK: RESERVE 0\n", reply)
 
 	gs, err = framework.WaitForGameServerState(gs, agonesv1.GameServerStateReserved, 3*time.Minute)
+<<<<<<< HEAD
 	if err != nil {
 		assert.FailNow(t, "Time out on waiting for gs in a Reserved state", err.Error())
 	}
@@ -606,11 +624,19 @@ func TestGameServerReserve(t *testing.T) {
 	reply, err = e2eframework.SendGameServerUDP(gs, "ALLOCATE")
 	if err != nil {
 		assert.FailNow(t, "Could not message GameServer", err.Error())
+=======
+	assert.NoError(t, err)
+
+	reply, err = e2eframework.SendGameServerUDP(gs, "ALLOCATE")
+	if !assert.NoError(t, err) {
+		assert.FailNow(t, "Could not message GameServer")
+>>>>>>> 8bdc911b (Flaky: TestGameServerReserve (#1565))
 	}
 	assert.Equal(t, "ACK: ALLOCATE\n", reply)
 
 	// put it in a totally different state, just to reset things.
 	gs, err = framework.WaitForGameServerState(gs, agonesv1.GameServerStateAllocated, 3*time.Minute)
+<<<<<<< HEAD
 	if err != nil {
 		assert.FailNow(t, "Time out on waiting for gs in an Allocated state", err.Error())
 	}
@@ -618,6 +644,13 @@ func TestGameServerReserve(t *testing.T) {
 	reply, err = e2eframework.SendGameServerUDP(gs, "RESERVE 5s")
 	if err != nil {
 		assert.FailNow(t, "Could not message GameServer", err.Error())
+=======
+	assert.NoError(t, err)
+
+	reply, err = e2eframework.SendGameServerUDP(gs, "RESERVE 5s")
+	if !assert.NoError(t, err) {
+		assert.FailNow(t, "Could not message GameServer")
+>>>>>>> 8bdc911b (Flaky: TestGameServerReserve (#1565))
 	}
 	assert.Equal(t, "ACK: RESERVE 5s\n", reply)
 
