@@ -29,7 +29,11 @@ spec:
 ```
 
 From there, if you need to change the capacity of the GameSever as gameplay is in progress, you can also do so via 
+<<<<<<< HEAD
 [`SDK.Alpha().SetPlayerCapacity(count)`]({{< ref "/docs/Guides/Client SDKs/_index.md#alphasetplayercapacitycount" >}}) 
+=======
+[`SDK.Alpha().SetPlayerCapacity(count)`]({{< ref "/docs/Guides/Client SDKs/_index.md#alpha-setplayercapacity-count" >}}) 
+>>>>>>> d3ecd0ea (Player Tracking guide, and GameServer reference. (#1569))
 
 The current player capacity is represented in `GameServer.Status.Players.Capacity` resource value.
 
@@ -53,7 +57,11 @@ Status:
 ```
 
 From the SDK, the game server binary can also retrieve the current player capacity 
+<<<<<<< HEAD
 via [`SDK.Alpha().GetPlayerCapacity()`]({{< ref "/docs/Guides/Client SDKs/_index.md#alphagetplayercapacity" >}}).
+=======
+via [`SDK.Alpha().GetPlayerCapacity()`]({{< ref "/docs/Guides/Client SDKs/_index.md#alpha-getplayercapacity" >}}).
+>>>>>>> d3ecd0ea (Player Tracking guide, and GameServer reference. (#1569))
 
 {{% alert title="Note" color="info" %}}
 Changing the capacity value here has no impact on players actually
@@ -70,11 +78,19 @@ are currently connected.
 It assumed that each player that connects has a unique token that identifies them as a player.
 
 When a player connects to the game server binary, 
+<<<<<<< HEAD
 calling [`SDK.Alpha().PlayerConnect(playerID)`]({{< ref "/docs/Guides/Client SDKs/_index.md#alphaplayerconnectplayerid" >}})
 with the unique player token will register them as connected, and store their player id.
  
 At disconnection time,
 call [`SDK.Alpha().PlayerDisconnect(playerID)`]({{< ref "/docs/Guides/Client SDKs/_index.md#alphaplayerdisconnectplayerid" >}})
+=======
+calling [`SDK.Alpha().PlayerConnect(playerID)`]({{< ref "/docs/Guides/Client SDKs/_index.md#alpha-playerconnect-playerid" >}})
+with the unique player token will register them as connected, and store their player id.
+ 
+At disconnection time,
+call [`SDK.Alpha().PlayerDisconnect(playerID)`]({{< ref "/docs/Guides/Client SDKs/_index.md#alpha-playerdisconnect-playerid" >}})
+>>>>>>> d3ecd0ea (Player Tracking guide, and GameServer reference. (#1569))
 , which will deregister them and remove their player id from the list.
 
 Each of these `playerIDs` is stored on `GameServer.Status.Players.IDs`, and the current count of connected players
@@ -117,9 +133,15 @@ players.
 
 Therefore, if you want to:
 
+<<<<<<< HEAD
 * Get the current player count, call [`SDK.Alpha().GetPlayerCount()`]({{< ref "/docs/Guides/Client SDKs/_index.md#alphagetplayercount" >}})
 * Check if a specific player is connected, call [`SDK.Alpha().IsPlayerConnected(playerID)`]({{< ref "/docs/Guides/Client SDKs/_index.md#alphaisplayerconnectedplayerid" >}})
 * Retrieve the full list of connected players, call [`SDK.Alpha().GetConnectedPlayers()`]({{< ref "/docs/Guides/Client SDKs/_index.md#alphagetconnectedplayers" >}})
+=======
+* Get the current player count, call [`SDK.Alpha().GetPlayerCount()`]({{< ref "/docs/Guides/Client SDKs/_index.md#alpha-getplayercount" >}})
+* Check if a specific player is connected, call [`SDK.Alpha().IsPlayerConnected(playerID)`]({{< ref "/docs/Guides/Client SDKs/_index.md#alpha-isplayerconnected-playerid" >}})
+* Retrieve the full list of connected players, call [`SDK.Alpha().GetConnectedPlayers()`]({{< ref "/docs/Guides/Client SDKs/_index.md#alpha-getconnectedplayers" >}})
+>>>>>>> d3ecd0ea (Player Tracking guide, and GameServer reference. (#1569))
 
 ## Next Steps
 
