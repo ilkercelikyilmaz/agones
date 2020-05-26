@@ -309,4 +309,8 @@ Response:
 {"list":["uzh7i","3zh7i"]}
 ```
 
+<<<<<<< HEAD
 [playerstatus]: {{< ref "/docs/Reference/agones_crd_api_reference.html#agones.dev/v1.PlayerStatus" >}}
+=======
+[playerstatus]: {{< ref "/docs/Reference/agones_crd_api_reference.html#PlayerStatus" >}}
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))

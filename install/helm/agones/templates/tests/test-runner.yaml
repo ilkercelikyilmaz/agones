@@ -33,10 +33,14 @@ spec:
     env:
     - name: GAMESERVER_IMAGE
 <<<<<<< HEAD
+<<<<<<< HEAD
       value: "gcr.io/agones-images/udp-server:0.21"
 =======
       value: "gcr.io/agones-images/udp-server:0.19"
 >>>>>>> 91a82d2e (Add a simple helm test (#1449))
+=======
+      value: "gcr.io/agones-images/udp-server:0.21"
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     - name: IS_HELM_TEST
       value: "true"
     - name: GAMESERVERS_NAMESPACE

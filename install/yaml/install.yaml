@@ -34,9 +34,13 @@ metadata:
   labels:
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Tiller
 ---
@@ -47,7 +51,11 @@ metadata:
   namespace: agones-system
   labels:
     app: agones
+<<<<<<< HEAD
     chart: agones-1.5.0
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Tiller
 rules:
@@ -92,8 +100,12 @@ metadata:
   namespace: agones-system
   labels:
     app: agones
+<<<<<<< HEAD
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 ---
@@ -119,10 +131,14 @@ metadata:
   labels:
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 ---
@@ -159,7 +175,11 @@ data:
   ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUM0akNDQWNxZ0F3SUJBZ0lSQU9lTWcwK1JKaFBJbks5ekFpMnpoUjR3RFFZSktvWklodmNOQVFFTEJRQXcKR0RFV01CUUdBMVVFQXhNTllXeHNiMk5oZEdsdmJpMWpZVEFlRncweE9UQTJNVGt4T0RRek5UVmFGdzB5T1RBMgpNVFl4T0RRek5UVmFNQUF3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRDZMSm5DCmk5RmZnc0Z4MVQremNScm5FNEZRNUNQVUVQOEdrUHNxSE1ic21EelArMEIrVWtFK3k1cGpWbGcrdThxbHNkQ24KenRRVlU1OC9sejJTUDdBZnNIMTNISUpzaTZ4azc3M1hSRVE0NlhxSnBvblg3NjRSajJ5Zjd4T25KMDRidGxUSgp0M3E4U0IvUFk3c2tXdHlRTjJQRDN4QVN0REVXbnUvdzNHMUxNNzYyWGJ3a1o3VlJUY1hFdEpUaTY3dWlwdy96CmhVaU9NcFplT1YxV09neit4cjJQZTZmK0NObTNYUzNVblhjUzhKYmlxajhXQmM4bzdaS2VyRnJlNGFMRElldFkKK3g5M1lYWDZYNjNCZDNvZ3JlR3BmeFdRU3hBYTBHUEtLa1dvaHNESWZRREYwZ0pKcjZSc0prOVVOWEZyaHJqMApUSTRzTGRMbCthdlJMSjFQQWdNQkFBR2pQekE5TUE0R0ExVWREd0VCL3dRRUF3SUZvREFkQmdOVkhTVUVGakFVCkJnZ3JCZ0VGQlFjREFRWUlLd1lCQlFVSEF3SXdEQVlEVlIwVEFRSC9CQUl3QURBTkJna3Foa2lHOXcwQkFRc0YKQUFPQ0FRRUFKZ1ErVzZlYTdKZjhldmp0cWNmRC9EZUVMYzRLcFFwdk9NR0ZGVDkzQTM4bWFzeFNxVXluOGk4RgppaEplNDZFZnFkREQvcWRWSDh4TkJId2NIcjgyVDVLcFkzTWc1amJPWG1iMEoxZEdSTFRHSmdGd0ZpUXdsM3J3CmZ4dWhlYnZvaTJkcVhQbGc3L2ZZZmVqN2RkbTAxMTdhRCtwUExCN0NNUGVLdk5QSHF2N0VBRlowOU8rRjM3cjkKNTBPZEMrSk1VK0FNczRVMzVVeEZGZjRVRHVIbWM4U0l0bTJra1U3Vk1TcDFaV1VuRVZFUExaU09SZ3dZdWFNcQo3WTgzOVpXVmtyRGZMUEJrS09Ec1BVMDI3NGdmbXBpTmNyVElYREhPY2hhcFByWG53eDhxLzcrZERYYlhoUk84ClFDK2lZWVY0MVlTSGt1djNiYUtrYXlYamV0czc3Zz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
 =======
     app: agones
+<<<<<<< HEAD
     chart: agones-1.5.0
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Tiller
 rules:
@@ -190,7 +210,11 @@ data:
   tls.key: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcFFJQkFBS0NBUUVBK2l5WndvdlJYNExCY2RVL3MzRWE1eE9CVU9RajFCRC9CcEQ3S2h6RzdKZzh6L3RBCmZsSkJQc3VhWTFaWVBydktwYkhRcDg3VUZWT2ZQNWM5a2ord0g3QjlkeHlDYkl1c1pPKzkxMFJFT09sNmlhYUoKMSsrdUVZOXNuKzhUcHlkT0c3WlV5YmQ2dkVnZnoyTzdKRnJja0Rkanc5OFFFclF4RnA3djhOeHRTek8rdGwyOApKR2UxVVUzRnhMU1U0dXU3b3FjUDg0VklqaktXWGpsZFZqb00vc2E5ajN1bi9nalp0MTB0MUoxM0V2Q1c0cW8vCkZnWFBLTzJTbnF4YTN1R2l3eUhyV1BzZmQyRjErbCt0d1hkNklLM2hxWDhWa0VzUUd0Qmp5aXBGcUliQXlIMEEKeGRJQ1NhK2tiQ1pQVkRWeGE0YTQ5RXlPTEMzUzVmbXIwU3lkVHdJREFRQUJBb0lCQVFDK1JQV2NsU0prZGRvUwpiWkhKTkJpMTdvdkhyZnZoNmh0TUx6QVhVMU9uMWhGS1RWazd1ZXVOaXVTYzhLcWs2OGF3UnBEZlQ5clZiWWdNCm9VWmUyTGxuSUtBTDIwOEdweVF5a0hQZUtUbUozMmtuRDlaK3VQZTJ1MUp1UVRLOVNwT0pXQjhjVzhPcE4yR2EKSmN2TFZwK3h2NjdNNWZZZmc1UmlFL2VCUk9TSzhBc0ZFMUlTNmpSRzRVaC84U1dSUUdEYzlReU1Lc3lNbFNVZwphajB4ZWtsWUZDWXl0WUtCMnBaSGw0N1lUK1kzalR6cXN1ekhxK1hIM1hkT043bDk3eHZYZWJPTEJZRWorMGI1Cml4NEJ1bEJIQS9WRk93eXU2LzRKalptRHB1dVRpNnpNbVMyYXV0OW1EY3VoOUZjem1qQ0ZMcnAyWmJiMC9acDQKRkttZXRJR0JBb0dCQVAwSzk4V3kyN2xyVklrQ2JVTnpoNkdzeUhGSXZZYXY0cTJsSzJZVGdKRld2a0tGemFKagpmYWRZMHRmUHV6V3dPUU9nWkl3aW94TElOVFNSa0llbCtrQnFVMkNIblZOc3F4M05nSWk0S0g3K1ltS2ZFMFJtCkRaamV0YTlpTW52a0IyQXVSRUhDSEplVThYd2JNR2JnaXJNSmhlZmIwREJlY2xmZmwrbk8wSlFSQW9HQkFQMFoKRFBoU2RsQnBRMDFQcDVSNmpwaW1KaEIrNXNaejhsZXNiRlpSMDc2VHI5STJXQm1vY2t2dmZYWi8vWkRxSllaYgpoWkxEN09NdjFELy9MMDFvK1ZTaGRwNVovL05samw3NG5nV3VoY01GYmVLMjdhVmEyQTRmak1VMGE2a3NCZXM3CmkxZTRIOTJLOHpHVk9vOTV3dXhub3RtVEY1SHpncE9CUFhLY0NmdGZBb0dCQUlId3ZlZWh2ejlxSkZEdkZCak4KSE5zakZSTkhYVHZxMmlaOWFOblVMZk4wYmVOUFBwZWpLNFZpRVhPTlV2OXc3UFkxeVN4RkpTU2g5dUIxMTVndwozVjl5dWpvWnFlcUxKUnY2eVlScnZTL3BoYkJMSytPMTNFbWlJLzVhR0w2U0RFK1JzcTlwOUxES1pXOXJydUZGCmNUUWJNYzRzaks0cDhlRzZDaEtnaDI5aEFvR0JBTkdUK01WM296a2FzUHhIeFVDUjY1cERtcWwySzZxUlFFK1IKRzNTdTlXT043NzFsK3JYa1lpQzNBM0Vvc3ROWTBCSGRuMUhVbzBmTXh6am5Ha2hEY0pLLzBQVjNHUlozTmRrMgpqY091ckZ5OUZpenh4UDl6cGd5cjIybEE2eFYrdXJmNjZudU1uL1pYcE9HZDdJdjZDNHF1bG84TDJpeWxNNjdwCkNmVHBlT3FKQW9HQUF4cit6Qm1wSkNMbjJZcXJQRVRSUTE2K2Vna1ovMElIQWh4KzhTVlZnN2hjc2Z0MmJLSEoKWUJ2bVBlRnNaNjFTdmRHbXRtT2pqMkUremtFekZvQzhHWXpOU0hsbjFLYTh3UnNlVmI1UlJkWiswSnB5ZUFCWQpOVVlISDVjcWgxamdnQlg4eXExSmdPcDN1REZLQVFJelpCWnZXZ01YRFUwY2thS1pHQkxsQUYwPQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
 =======
     app: agones
+<<<<<<< HEAD
     chart: agones-1.5.0
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Tiller
 subjects:
@@ -241,10 +265,14 @@ metadata:
     component: crd
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 spec:
@@ -481,10 +509,14 @@ metadata:
     component: crd
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 spec:
@@ -570,10 +602,14 @@ metadata:
     component: crd
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 spec:
@@ -776,10 +812,14 @@ metadata:
     component: crd
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
   name: gameserverallocationpolicies.multicluster.agones.dev
@@ -875,10 +915,14 @@ metadata:
     component: crd
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 spec:
@@ -1113,7 +1157,11 @@ metadata:
   labels:
     agones.dev/role: controller
     app: agones
+<<<<<<< HEAD
     chart: agones-1.5.0
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Tiller
 spec:
@@ -1136,6 +1184,7 @@ metadata:
   namespace: agones-system
   labels:
     app: agones
+<<<<<<< HEAD
 <<<<<<< HEAD
     chart: agones-1.10.0-dev
     release: agones-manual
@@ -1161,6 +1210,9 @@ rules:
   verbs: ["get", "list", "watch"]
 =======
     chart: agones-1.5.0
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Tiller
 spec:
@@ -1231,7 +1283,11 @@ spec:
           secretName: allocator-client-ca
       containers:
       - name: agones-allocator
+<<<<<<< HEAD
         image: "gcr.io/agones-images/agones-allocator:1.5.0"
+=======
+        image: "gcr.io/agones-images/agones-allocator:1.6.0"
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
         imagePullPolicy: IfNotPresent
         livenessProbe:
           httpGet:
@@ -1288,10 +1344,14 @@ metadata:
   labels:
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 rules:
@@ -1338,10 +1398,14 @@ metadata:
   labels:
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 rules:
@@ -1362,10 +1426,14 @@ metadata:
   labels:
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 subjects:
@@ -1384,6 +1452,7 @@ metadata:
   name: agones-controller-access
   namespace: agones-system
   labels:
+<<<<<<< HEAD
     app: agones
     chart: agones-1.10.0-dev
     release: agones-manual
@@ -1396,6 +1465,16 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: agones-controller
+=======
+    app: agones-manual
+    chart: "agones-1.6.0"
+    release: "agones-manual"
+    heritage: "Tiller"
+data:
+  ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUM0akNDQWNxZ0F3SUJBZ0lSQU9lTWcwK1JKaFBJbks5ekFpMnpoUjR3RFFZSktvWklodmNOQVFFTEJRQXcKR0RFV01CUUdBMVVFQXhNTllXeHNiMk5oZEdsdmJpMWpZVEFlRncweE9UQTJNVGt4T0RRek5UVmFGdzB5T1RBMgpNVFl4T0RRek5UVmFNQUF3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRDZMSm5DCmk5RmZnc0Z4MVQremNScm5FNEZRNUNQVUVQOEdrUHNxSE1ic21EelArMEIrVWtFK3k1cGpWbGcrdThxbHNkQ24KenRRVlU1OC9sejJTUDdBZnNIMTNISUpzaTZ4azc3M1hSRVE0NlhxSnBvblg3NjRSajJ5Zjd4T25KMDRidGxUSgp0M3E4U0IvUFk3c2tXdHlRTjJQRDN4QVN0REVXbnUvdzNHMUxNNzYyWGJ3a1o3VlJUY1hFdEpUaTY3dWlwdy96CmhVaU9NcFplT1YxV09neit4cjJQZTZmK0NObTNYUzNVblhjUzhKYmlxajhXQmM4bzdaS2VyRnJlNGFMRElldFkKK3g5M1lYWDZYNjNCZDNvZ3JlR3BmeFdRU3hBYTBHUEtLa1dvaHNESWZRREYwZ0pKcjZSc0prOVVOWEZyaHJqMApUSTRzTGRMbCthdlJMSjFQQWdNQkFBR2pQekE5TUE0R0ExVWREd0VCL3dRRUF3SUZvREFkQmdOVkhTVUVGakFVCkJnZ3JCZ0VGQlFjREFRWUlLd1lCQlFVSEF3SXdEQVlEVlIwVEFRSC9CQUl3QURBTkJna3Foa2lHOXcwQkFRc0YKQUFPQ0FRRUFKZ1ErVzZlYTdKZjhldmp0cWNmRC9EZUVMYzRLcFFwdk9NR0ZGVDkzQTM4bWFzeFNxVXluOGk4RgppaEplNDZFZnFkREQvcWRWSDh4TkJId2NIcjgyVDVLcFkzTWc1amJPWG1iMEoxZEdSTFRHSmdGd0ZpUXdsM3J3CmZ4dWhlYnZvaTJkcVhQbGc3L2ZZZmVqN2RkbTAxMTdhRCtwUExCN0NNUGVLdk5QSHF2N0VBRlowOU8rRjM3cjkKNTBPZEMrSk1VK0FNczRVMzVVeEZGZjRVRHVIbWM4U0l0bTJra1U3Vk1TcDFaV1VuRVZFUExaU09SZ3dZdWFNcQo3WTgzOVpXVmtyRGZMUEJrS09Ec1BVMDI3NGdmbXBpTmNyVElYREhPY2hhcFByWG53eDhxLzcrZERYYlhoUk84ClFDK2lZWVY0MVlTSGt1djNiYUtrYXlYamV0czc3Zz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  
+
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 ---
 # Source: agones/templates/serviceaccounts/controller.yaml
 #
@@ -1404,6 +1483,7 @@ roleRef:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+<<<<<<< HEAD
   name: agones-controller:system:auth-delegator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -1417,6 +1497,23 @@ subjects:
 # Source: agones/templates/serviceaccounts/controller.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
+=======
+  name: allocator-tls
+  namespace: agones-system
+  labels:
+    app: agones-manual
+    chart: "agones-1.6.0"
+    release: "agones-manual"
+    heritage: "Tiller"
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUM0akNDQWNxZ0F3SUJBZ0lSQU9lTWcwK1JKaFBJbks5ekFpMnpoUjR3RFFZSktvWklodmNOQVFFTEJRQXcKR0RFV01CUUdBMVVFQXhNTllXeHNiMk5oZEdsdmJpMWpZVEFlRncweE9UQTJNVGt4T0RRek5UVmFGdzB5T1RBMgpNVFl4T0RRek5UVmFNQUF3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRDZMSm5DCmk5RmZnc0Z4MVQremNScm5FNEZRNUNQVUVQOEdrUHNxSE1ic21EelArMEIrVWtFK3k1cGpWbGcrdThxbHNkQ24KenRRVlU1OC9sejJTUDdBZnNIMTNISUpzaTZ4azc3M1hSRVE0NlhxSnBvblg3NjRSajJ5Zjd4T25KMDRidGxUSgp0M3E4U0IvUFk3c2tXdHlRTjJQRDN4QVN0REVXbnUvdzNHMUxNNzYyWGJ3a1o3VlJUY1hFdEpUaTY3dWlwdy96CmhVaU9NcFplT1YxV09neit4cjJQZTZmK0NObTNYUzNVblhjUzhKYmlxajhXQmM4bzdaS2VyRnJlNGFMRElldFkKK3g5M1lYWDZYNjNCZDNvZ3JlR3BmeFdRU3hBYTBHUEtLa1dvaHNESWZRREYwZ0pKcjZSc0prOVVOWEZyaHJqMApUSTRzTGRMbCthdlJMSjFQQWdNQkFBR2pQekE5TUE0R0ExVWREd0VCL3dRRUF3SUZvREFkQmdOVkhTVUVGakFVCkJnZ3JCZ0VGQlFjREFRWUlLd1lCQlFVSEF3SXdEQVlEVlIwVEFRSC9CQUl3QURBTkJna3Foa2lHOXcwQkFRc0YKQUFPQ0FRRUFKZ1ErVzZlYTdKZjhldmp0cWNmRC9EZUVMYzRLcFFwdk9NR0ZGVDkzQTM4bWFzeFNxVXluOGk4RgppaEplNDZFZnFkREQvcWRWSDh4TkJId2NIcjgyVDVLcFkzTWc1amJPWG1iMEoxZEdSTFRHSmdGd0ZpUXdsM3J3CmZ4dWhlYnZvaTJkcVhQbGc3L2ZZZmVqN2RkbTAxMTdhRCtwUExCN0NNUGVLdk5QSHF2N0VBRlowOU8rRjM3cjkKNTBPZEMrSk1VK0FNczRVMzVVeEZGZjRVRHVIbWM4U0l0bTJra1U3Vk1TcDFaV1VuRVZFUExaU09SZ3dZdWFNcQo3WTgzOVpXVmtyRGZMUEJrS09Ec1BVMDI3NGdmbXBpTmNyVElYREhPY2hhcFByWG53eDhxLzcrZERYYlhoUk84ClFDK2lZWVY0MVlTSGt1djNiYUtrYXlYamV0czc3Zz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.key: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcFFJQkFBS0NBUUVBK2l5WndvdlJYNExCY2RVL3MzRWE1eE9CVU9RajFCRC9CcEQ3S2h6RzdKZzh6L3RBCmZsSkJQc3VhWTFaWVBydktwYkhRcDg3VUZWT2ZQNWM5a2ord0g3QjlkeHlDYkl1c1pPKzkxMFJFT09sNmlhYUoKMSsrdUVZOXNuKzhUcHlkT0c3WlV5YmQ2dkVnZnoyTzdKRnJja0Rkanc5OFFFclF4RnA3djhOeHRTek8rdGwyOApKR2UxVVUzRnhMU1U0dXU3b3FjUDg0VklqaktXWGpsZFZqb00vc2E5ajN1bi9nalp0MTB0MUoxM0V2Q1c0cW8vCkZnWFBLTzJTbnF4YTN1R2l3eUhyV1BzZmQyRjErbCt0d1hkNklLM2hxWDhWa0VzUUd0Qmp5aXBGcUliQXlIMEEKeGRJQ1NhK2tiQ1pQVkRWeGE0YTQ5RXlPTEMzUzVmbXIwU3lkVHdJREFRQUJBb0lCQVFDK1JQV2NsU0prZGRvUwpiWkhKTkJpMTdvdkhyZnZoNmh0TUx6QVhVMU9uMWhGS1RWazd1ZXVOaXVTYzhLcWs2OGF3UnBEZlQ5clZiWWdNCm9VWmUyTGxuSUtBTDIwOEdweVF5a0hQZUtUbUozMmtuRDlaK3VQZTJ1MUp1UVRLOVNwT0pXQjhjVzhPcE4yR2EKSmN2TFZwK3h2NjdNNWZZZmc1UmlFL2VCUk9TSzhBc0ZFMUlTNmpSRzRVaC84U1dSUUdEYzlReU1Lc3lNbFNVZwphajB4ZWtsWUZDWXl0WUtCMnBaSGw0N1lUK1kzalR6cXN1ekhxK1hIM1hkT043bDk3eHZYZWJPTEJZRWorMGI1Cml4NEJ1bEJIQS9WRk93eXU2LzRKalptRHB1dVRpNnpNbVMyYXV0OW1EY3VoOUZjem1qQ0ZMcnAyWmJiMC9acDQKRkttZXRJR0JBb0dCQVAwSzk4V3kyN2xyVklrQ2JVTnpoNkdzeUhGSXZZYXY0cTJsSzJZVGdKRld2a0tGemFKagpmYWRZMHRmUHV6V3dPUU9nWkl3aW94TElOVFNSa0llbCtrQnFVMkNIblZOc3F4M05nSWk0S0g3K1ltS2ZFMFJtCkRaamV0YTlpTW52a0IyQXVSRUhDSEplVThYd2JNR2JnaXJNSmhlZmIwREJlY2xmZmwrbk8wSlFSQW9HQkFQMFoKRFBoU2RsQnBRMDFQcDVSNmpwaW1KaEIrNXNaejhsZXNiRlpSMDc2VHI5STJXQm1vY2t2dmZYWi8vWkRxSllaYgpoWkxEN09NdjFELy9MMDFvK1ZTaGRwNVovL05samw3NG5nV3VoY01GYmVLMjdhVmEyQTRmak1VMGE2a3NCZXM3CmkxZTRIOTJLOHpHVk9vOTV3dXhub3RtVEY1SHpncE9CUFhLY0NmdGZBb0dCQUlId3ZlZWh2ejlxSkZEdkZCak4KSE5zakZSTkhYVHZxMmlaOWFOblVMZk4wYmVOUFBwZWpLNFZpRVhPTlV2OXc3UFkxeVN4RkpTU2g5dUIxMTVndwozVjl5dWpvWnFlcUxKUnY2eVlScnZTL3BoYkJMSytPMTNFbWlJLzVhR0w2U0RFK1JzcTlwOUxES1pXOXJydUZGCmNUUWJNYzRzaks0cDhlRzZDaEtnaDI5aEFvR0JBTkdUK01WM296a2FzUHhIeFVDUjY1cERtcWwySzZxUlFFK1IKRzNTdTlXT043NzFsK3JYa1lpQzNBM0Vvc3ROWTBCSGRuMUhVbzBmTXh6am5Ha2hEY0pLLzBQVjNHUlozTmRrMgpqY091ckZ5OUZpenh4UDl6cGd5cjIybEE2eFYrdXJmNjZudU1uL1pYcE9HZDdJdjZDNHF1bG84TDJpeWxNNjdwCkNmVHBlT3FKQW9HQUF4cit6Qm1wSkNMbjJZcXJQRVRSUTE2K2Vna1ovMElIQWh4KzhTVlZnN2hjc2Z0MmJLSEoKWUJ2bVBlRnNaNjFTdmRHbXRtT2pqMkUremtFekZvQzhHWXpOU0hsbjFLYTh3UnNlVmI1UlJkWiswSnB5ZUFCWQpOVVlISDVjcWgxamdnQlg4eXExSmdPcDN1REZLQVFJelpCWnZXZ01YRFUwY2thS1pHQkxsQUYwPQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
+
+---
+# Allocation TLS CA
+apiVersion: v1
+kind: Secret
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 metadata:
   name: agones-controller-auth-reader
   namespace: kube-system
@@ -1473,6 +1570,7 @@ spec:
   type: LoadBalancer
 =======
     app: agones-manual
+<<<<<<< HEAD
     chart: "agones-1.5.0"
     release: "agones-manual"
     heritage: "Tiller"
@@ -1589,6 +1687,9 @@ spec:
 =======
     app: agones-manual
     chart: "agones-1.5.0"
+=======
+    chart: "agones-1.6.0"
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: "agones-manual"
     heritage: "Tiller"
 data:
@@ -1627,7 +1728,7 @@ spec:
     imagePullPolicy: Always
     env:
     - name: GAMESERVER_IMAGE
-      value: "gcr.io/agones-images/udp-server:0.19"
+      value: "gcr.io/agones-images/udp-server:0.21"
     - name: IS_HELM_TEST
       value: "true"
     - name: GAMESERVERS_NAMESPACE
@@ -1659,10 +1760,14 @@ metadata:
     component: controller
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 spec:
@@ -1706,10 +1811,14 @@ spec:
       containers:
       - name: agones-controller
 <<<<<<< HEAD
+<<<<<<< HEAD
         image: "gcr.io/agones-images/agones-controller:1.10.0-dev"
 =======
         image: "gcr.io/agones-images/agones-controller:1.5.0"
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+        image: "gcr.io/agones-images/agones-controller:1.6.0"
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
         imagePullPolicy: IfNotPresent
         env:
         # minimum port that can be exposed to GameServer traffic
@@ -1720,10 +1829,14 @@ spec:
           value: "8000"
         - name: SIDECAR_IMAGE # overwrite the GameServer sidecar image that is used
 <<<<<<< HEAD
+<<<<<<< HEAD
           value: "gcr.io/agones-images/agones-sdk:1.10.0-dev"
 =======
           value: "gcr.io/agones-images/agones-sdk:1.5.0"
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+          value: "gcr.io/agones-images/agones-sdk:1.6.0"
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
         - name: ALWAYS_PULL_SIDECAR # set the sidecar imagePullPolicy to Always
           value: "false"
         - name: SIDECAR_CPU_REQUEST
@@ -1813,10 +1926,14 @@ metadata:
     component: ping
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 spec:
@@ -1852,10 +1969,14 @@ spec:
       containers:
         - name: agones-ping
 <<<<<<< HEAD
+<<<<<<< HEAD
           image: "gcr.io/agones-images/agones-ping:1.10.0-dev"
 =======
           image: "gcr.io/agones-images/agones-ping:1.5.0"
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+          image: "gcr.io/agones-images/agones-ping:1.6.0"
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -1884,9 +2005,13 @@ metadata:
     multicluster.agones.dev/role: allocator
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 spec:
@@ -2017,7 +2142,11 @@ metadata:
   labels:
     component: ping
     app: agones
+<<<<<<< HEAD
     chart: agones-1.5.0
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Tiller
 spec:
@@ -2058,10 +2187,14 @@ metadata:
     component: controller
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 webhooks:
@@ -2102,10 +2235,14 @@ metadata:
     component: controller
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Helm
 webhooks:
@@ -2158,7 +2295,11 @@ metadata:
   labels:
     component: controller
     app: agones
+<<<<<<< HEAD
     chart: agones-1.5.0
+=======
+    chart: agones-1.6.0
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: agones-manual
     heritage: Tiller
 webhooks:
@@ -2188,7 +2329,11 @@ metadata:
   namespace: agones-system
   labels:
     app: agones-manual
+<<<<<<< HEAD
     chart: "agones-1.5.0"
+=======
+    chart: "agones-1.6.0"
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
     release: "agones-manual"
     heritage: "Tiller"
 type: Opaque

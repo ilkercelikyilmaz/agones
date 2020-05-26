@@ -27,7 +27,11 @@ spec:
         spec:
           containers:
           - name: simple-udp
+<<<<<<< HEAD
             image: gcr.io/agones-images/udp-server:0.21
+=======
+            image: gcr.io/agones-alexander/udp-server:0.21
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
             resources:
               requests:
                 memory: "64Mi"

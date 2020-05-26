@@ -244,10 +244,14 @@ The following tables lists the configurable parameters of the Agones chart and t
 | `helm.installTests`                                 | Add an ability to run `helm test agones` to verify the installation                             | `8000`                 |
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 {{% feature publishVersion="1.10.0" %}}
 =======
 {{% feature publishVersion="1.6.0" %}}
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+{{% feature publishVersion="1.7.0" %}}
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 **New Configuration Features:**
 
 | Parameter                                           | Description                                                                                     | Default                |
@@ -296,6 +300,7 @@ You can use the default {{< ghlink href="install/helm/agones/values.yaml" >}}val
 {{< /alert >}}
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 ## Helm test
 
 {{< alert title="Tip" color="info">}}
@@ -305,6 +310,8 @@ In order to use `helm test` command described in this section you need to set `h
 =======
 {{% feature publishVersion="1.6.0" %}}
 >>>>>>> 91a82d2e (Add a simple helm test (#1449))
+=======
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 Check the Agones installation by running the following command:
 ```bash
 $ helm test my-release --cleanup                     
@@ -329,9 +336,12 @@ That means that you skipped the `--cleanup` flag and you should either delete th
 That mean that you skiped `--cleanup` flag and you should either delete `agones-test` pod manually or run with the same test `helm test my-release --cleanup` two more times.
 {{< /alert >}}
 
+<<<<<<< HEAD
 {{% /feature %}}
 
 >>>>>>> 91a82d2e (Add a simple helm test (#1449))
+=======
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 ## TLS Certificates
 
 By default agones chart generates tls certificates used by the admission controller, while this is handy, it requires the agones controller to restart on each `helm upgrade` command.

@@ -88,13 +88,24 @@ release_branch = "release-1.9.0"
 release_version = "1.9.0"
 =======
 # current release branch - could be rc
-release_branch = "release-1.5.0"
+release_branch = "release-1.6.0"
 # the main version. Never is rc.
+<<<<<<< HEAD
 release_version = "1.5.0"
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
 
 # example tag
 example_image_tag = "gcr.io/agones-images/udp-server:0.21"
+=======
+release_version = "1.6.0"
+
+# example tag
+<<<<<<< HEAD
+example_image_tag = "gcr.io/agones-images/udp-server:0.18"
+=======
+example_image_tag = "gcr.io/agones-images/udp-server:0.21"
+>>>>>>> 79881118 (Release 1.6.0 (#1588))
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 
 # User interface configuration
 [params.ui]

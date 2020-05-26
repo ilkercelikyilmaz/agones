@@ -5,11 +5,13 @@ description: >
   In order to allow allocation from multiple clusters, Agones provides a mechanism to set redirect rules for allocation requests to the right cluster.
 ---
 
+<<<<<<< HEAD
 {{% feature expiryVersion="1.10.0" %}}
+=======
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 {{< alert title="Beta" color="warning">}}
 This feature is in a pre-release state and might change.
 {{< /alert >}}
-{{% /feature %}}
 
 There may be different types of clusters, such as on-premise, and Google Kubernetes Engine (GKE), used by a game to help with the cost-saving and availability. 
 For this purpose, Agones provides a mechanism to define priorities on the clusters. Priorities are defined on {{< ghlink href="pkg/apis/multicluster/v1/gameserverallocationpolicy.go" >}}GameServerAllocationPolicy{{< /ghlink >}} agones CRD. A matchmaker can enable the multi-cluster rules on a request and target [agones-allocator]({{< relref "allocator-service.md">}}) endpoint in any of the clusters and get resources allocated on the cluster with the highest priority. If the cluster with the highest priority is overloaded, the allocation request is redirected to the cluster with the next highest priority.
@@ -46,7 +48,11 @@ EOF
 
 To define the local cluster priority, similarly, an allocation rule should be defined, while leaving allocationEndpoints unset. If the local cluster priority is not defined, the allocation from the local cluster happens only if allocation from other clusters with the existing allocation rules is unsuccessful.
 
+<<<<<<< HEAD
 `serverCa` is the server TLS CA public certificate, set only if the remote server certificate is not signed by a public CA (e.g. self-signed). If this field is not specified, the certificate can also be specified in the `ca.crt` field of the client secret (i.e. the secret referred to in the `secretName` field).
+=======
+`serverCa` is the server TLS CA public certificate, set only if the remote server certificate is not signed by a public CA (e.g. self-signed).
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 
 ## Establish trust
 

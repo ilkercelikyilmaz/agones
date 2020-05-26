@@ -28,8 +28,12 @@
         "access": "public"
     },
 <<<<<<< HEAD
+<<<<<<< HEAD
     "version": "1.10.0-dev"
 =======
     "version": "1.5.0"
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+    "version": "1.6.0"
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 }

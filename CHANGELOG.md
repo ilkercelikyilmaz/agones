@@ -1,6 +1,7 @@
 # Changelog
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 ## [v1.9.0](https://github.com/googleforgames/agones/tree/v1.9.0) (2020-09-29)
 
 [Full Changelog](https://github.com/googleforgames/agones/compare/v1.9.0-rc...v1.9.0)
@@ -305,6 +306,10 @@
 
 ## [v1.6.0](https://github.com/googleforgames/agones/tree/v1.6.0) (2020-05-26)
 
+=======
+## [v1.6.0](https://github.com/googleforgames/agones/tree/v1.6.0) (2020-05-26)
+
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 [Full Changelog](https://github.com/googleforgames/agones/compare/v1.6.0-rc...v1.6.0)
 
 **Fixed bugs:**
@@ -317,7 +322,10 @@
 
 **Merged pull requests:**
 
+<<<<<<< HEAD
 - Release 1.6.0 [\#1588](https://github.com/googleforgames/agones/pull/1588) ([markmandel](https://github.com/markmandel))
+=======
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 - Fix flaky Local SDK test [\#1586](https://github.com/googleforgames/agones/pull/1586) ([aLekSer](https://github.com/aLekSer))
 - Warning to release checklist. [\#1580](https://github.com/googleforgames/agones/pull/1580) ([markmandel](https://github.com/markmandel))
 

@@ -24,7 +24,15 @@ spec:
     spec:
       containers:
       - name: simple-udp
+<<<<<<< HEAD
         image: gcr.io/agones-images/udp-server:0.21
+=======
+<<<<<<< HEAD
+        image: gcr.io/agones-images/udp-server:0.18
+=======
+        image: gcr.io/agones-images/udp-server:0.21
+>>>>>>> 79881118 (Release 1.6.0 (#1588))
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
         env:
           - name: "PASSTHROUGH"
             value: "TRUE"

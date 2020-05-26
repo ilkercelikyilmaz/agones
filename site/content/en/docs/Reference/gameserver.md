@@ -9,7 +9,12 @@ description: >
 
 A full GameServer specification is available below and in the {{< ghlink href="examples/gameserver.yaml" >}}example folder{{< /ghlink >}} for reference :
 
+<<<<<<< HEAD
 {{% feature expiryVersion="1.5.0" %}}
+=======
+<<<<<<< HEAD
+{{% feature expiryVersion="1.6.0" %}}
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 ```yaml
 apiVersion: "agones.dev/v1"
 kind: GameServer
@@ -96,6 +101,8 @@ spec:
 {{% /feature %}}
 
 {{% feature publishVersion="1.6.0" %}}
+=======
+>>>>>>> 79881118 (Release 1.6.0 (#1588))
 ```yaml
 apiVersion: "agones.dev/v1"
 kind: GameServer
@@ -170,10 +177,9 @@ spec:
     spec:
       containers:
       - name: simple-udp
-        image:  gcr.io/agones-images/udp-server:0.19
+        image:  gcr.io/agones-images/udp-server:0.21
         imagePullPolicy: Always
 ```
-{{% /feature %}}
 
 Since Agones defines a new [Custom Resources Definition (CRD)](https://kubernetes.io/docs/concepts/api-extension/custom-resources/) we can define a new resource using the kind `GameServer` with the custom group `agones.dev` and API version `v1`.
 
@@ -184,6 +190,7 @@ The length of the `name` field of the Gameserver should not exceed 63 characters
 
 The `spec` field is the actual GameServer specification and it is composed as follow:
 
+<<<<<<< HEAD
 {{% feature expiryVersion="1.5.0" %}}
 - `container` is the name of container running the GameServer in case you have more than one container defined in the [pod](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/). If you do,  this is a mandatory field. For instance this is useful if you want to run a sidecar to ship logs.
 - `ports` are an array of ports that can be exposed as direct connections to the game server container
@@ -207,6 +214,8 @@ The `spec` field is the actual GameServer specification and it is composed as fo
 {{% /feature %}}
 
 {{% feature publishVersion="1.6.0" %}}
+=======
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 - `container` is the name of container running the GameServer in case you have more than one container defined in the [pod](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/). If you do,  this is a mandatory field. For instance this is useful if you want to run a sidecar to ship logs.
 - `ports` are an array of ports that can be exposed as direct connections to the game server container
   - `name` is an optional descriptive name for a port
@@ -235,8 +244,11 @@ The `spec` field is the actual GameServer specification and it is composed as fo
 =======
 - `players` (Alpha, behind "PlayerTracking" feature gate), sets this GameServer's initial player capacity
 - `template` the [pod spec template](https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#podtemplatespec-v1-core) to run your GameServer containers, [see](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/#pod-templates) for more information.
+<<<<<<< HEAD
 {{% /feature %}}
 >>>>>>> d3ecd0ea (Player Tracking guide, and GameServer reference. (#1569))
+=======
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 
 ## GameServer State Diagram
 

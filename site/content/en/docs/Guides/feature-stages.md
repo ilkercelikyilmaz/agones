@@ -26,6 +26,7 @@ The current set of `alpha` and `beta` feature gates are:
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 {{% feature publishVersion="1.10.0" %}}
 =======
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
@@ -59,6 +60,8 @@ The current set of `alpha` and `beta` feature gates are:
 {{% /feature %}}
 
 {{% feature publishVersion="1.6.0" %}}
+=======
+>>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
 | Feature Name | Gate    | Default | Stage | Since |
 |--------------|---------|---------|-------|-------|
 | Multicluster Allocation<sup>*</sup> | N/A | Enabled | `Alpha` | 0.11.0 |
@@ -70,7 +73,6 @@ The current set of `alpha` and `beta` feature gates are:
 
 <sup>*</sup>Multicluster Allocation was started before this process was in place, and therefore does not have a
  feature gate and cannot be disabled.
-{{% /feature %}}
 
 ## Description of Stages
 
