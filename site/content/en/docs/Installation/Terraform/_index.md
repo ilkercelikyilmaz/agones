@@ -21,6 +21,7 @@ a {{% ghlink href="install/terraform/modules/helm3" %}}Helm 3 Module{{% /ghlink 
 If you still require the {{% ghlink href="install/terraform/modules/helm" %}}Helm 2{{% /ghlink %}} module, it is still
 available, but isn't being actively maintained.
 {{% /alert %}}
+<<<<<<< HEAD
 {{% /feature %}}
 
 {{% feature publishVersion="1.10.0" %}}
@@ -32,3 +33,5 @@ The last Agones release to include a Helm 2 module was
 [1.9.0](https://agones.dev/site/blog/2020/09/29/1.9.0-kubernetes-1.16-nuget-and-tcp-udp/).
 {{% /alert %}}
 {{% /feature %}}
+=======
+>>>>>>> eb938386 (Release 1.7.0 (#1680))

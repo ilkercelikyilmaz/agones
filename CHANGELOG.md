@@ -2,6 +2,7 @@
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 ## [v1.9.0](https://github.com/googleforgames/agones/tree/v1.9.0) (2020-09-29)
 
 [Full Changelog](https://github.com/googleforgames/agones/compare/v1.9.0-rc...v1.9.0)
@@ -189,6 +190,8 @@
 - Move CloudBuild to N1\_HIGHCPU\_32 [\#1668](https://github.com/googleforgames/agones/pull/1668) ([markmandel](https://github.com/markmandel))
 - Added missing FailNow calls to sdkserver unit tests [\#1659](https://github.com/googleforgames/agones/pull/1659) ([akremsa](https://github.com/akremsa))
 
+=======
+>>>>>>> eb938386 (Release 1.7.0 (#1680))
 ## [v1.7.0](https://github.com/googleforgames/agones/tree/v1.7.0) (2020-07-07)
 
 [Full Changelog](https://github.com/googleforgames/agones/compare/v1.7.0-rc...v1.7.0)
@@ -202,10 +205,17 @@
 **Closed issues:**
 
 - Release 1.7.0-rc [\#1660](https://github.com/googleforgames/agones/issues/1660)
+<<<<<<< HEAD
 
 **Merged pull requests:**
 
 - Release 1.7.0 [\#1680](https://github.com/googleforgames/agones/pull/1680) ([markmandel](https://github.com/markmandel))
+=======
+- Connect to new GameServers after editing the fleet [\#1553](https://github.com/googleforgames/agones/issues/1553)
+
+**Merged pull requests:**
+
+>>>>>>> eb938386 (Release 1.7.0 (#1680))
 - Add C\# sdk to list of supported SDKs in overview doc [\#1678](https://github.com/googleforgames/agones/pull/1678) ([edmundlam](https://github.com/edmundlam))
 - Fix typo in gameserverallocations [\#1676](https://github.com/googleforgames/agones/pull/1676) ([aLekSer](https://github.com/aLekSer))
 - Update Hugo and Docsy [\#1671](https://github.com/googleforgames/agones/pull/1671) ([markmandel](https://github.com/markmandel))
@@ -1706,6 +1716,7 @@
 - CRD: added additionalPrinterColumns to GameServer for kubectl [\#444](https://github.com/googleforgames/agones/pull/444) ([jkowalski](https://github.com/jkowalski))
 - Adding explicit length of git revision in Makefile and E2E Can't Allocate test  [\#440](https://github.com/googleforgames/agones/pull/440) ([aLekSer](https://github.com/aLekSer))
 - Pinger service for Multiple Cluster Latency Measurement. [\#434](https://github.com/googleforgames/agones/pull/434) ([markmandel](https://github.com/markmandel))
+- Development tools to enable pprof [\#422](https://github.com/googleforgames/agones/pull/422) ([markmandel](https://github.com/markmandel))
 
 **Fixed bugs:**
 
@@ -1764,7 +1775,6 @@
 - Agones sdk-server sidecar should have cpu and memory limits [\#344](https://github.com/googleforgames/agones/issues/344)
 - As developer, I want to emulate an allocation in local mode [\#314](https://github.com/googleforgames/agones/issues/314)
 - Document how to configure maximum number of pods/node that can be allocated [\#295](https://github.com/googleforgames/agones/issues/295)
-- Development tools to enable pprof [\#422](https://github.com/googleforgames/agones/pull/422) ([markmandel](https://github.com/markmandel))
 - Changes to the GameServer configuration are reflected in the local sdk server [\#413](https://github.com/googleforgames/agones/pull/413) ([markmandel](https://github.com/markmandel))
 - Mark GameServer Unhealthy if allocated HostPort isn't available [\#408](https://github.com/googleforgames/agones/pull/408) ([markmandel](https://github.com/markmandel))
 - Cluster Autoscaling: safe-to-evict=false annotations for GameServer Pods [\#405](https://github.com/googleforgames/agones/pull/405) ([markmandel](https://github.com/markmandel))

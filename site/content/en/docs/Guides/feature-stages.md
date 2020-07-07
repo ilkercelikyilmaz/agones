@@ -27,6 +27,7 @@ The current set of `alpha` and `beta` feature gates are:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 {{% feature publishVersion="1.10.0" %}}
 =======
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
@@ -44,6 +45,8 @@ The current set of `alpha` and `beta` feature gates are:
 {{% /feature %}}
 
 {{% feature expiryVersion="1.10.0" %}}
+=======
+>>>>>>> eb938386 (Release 1.7.0 (#1680))
 | Feature Name | Gate    | Default | Stage | Since |
 |--------------|---------|---------|-------|-------|
 | Multicluster Allocation<sup>*</sup> | N/A | Enabled | `Beta` | 1.6.0 |

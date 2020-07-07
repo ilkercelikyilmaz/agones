@@ -245,6 +245,7 @@ The following tables lists the configurable parameters of the Agones chart and t
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 {{% feature publishVersion="1.10.0" %}}
 =======
 {{% feature publishVersion="1.6.0" %}}
@@ -252,10 +253,14 @@ The following tables lists the configurable parameters of the Agones chart and t
 =======
 {{% feature publishVersion="1.7.0" %}}
 >>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
+=======
+{{% feature publishVersion="1.8.0" %}}
+>>>>>>> eb938386 (Release 1.7.0 (#1680))
 **New Configuration Features:**
 
 | Parameter                                           | Description                                                                                     | Default                |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------- |
+<<<<<<< HEAD
 <<<<<<< HEAD
 | `agones.allocator.allocationTimeout`                | Remote allocation call timeout.                                      | `10s`                  |
 | `agones.allocator.remoteAllocationTimeout`          | Total remote allocation timeout including retries.       | `30s`                |
@@ -266,6 +271,9 @@ The following tables lists the configurable parameters of the Agones chart and t
 =======
 
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
+=======
+|                                                     |                                                                                                 |                        |
+>>>>>>> eb938386 (Release 1.7.0 (#1680))
 {{% /feature %}}
 
 [toleration]: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
