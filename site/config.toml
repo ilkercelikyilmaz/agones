@@ -82,6 +82,7 @@ github_repo = "https://github.com/googleforgames/agones"
 gcs_engine_id = "016691298986124624340:x7qv2dywdao"
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # current release branch. Never is rc.
 release_branch = "release-1.9.0"
 # the main version. Never is rc.
@@ -102,6 +103,12 @@ release_version = "1.6.0"
 =======
 release_version = "1.7.0"
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+# current release branch. Never is rc.
+release_branch = "release-1.8.0"
+# the main version. Never is rc.
+release_version = "1.8.0"
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
 
 # example tag
 <<<<<<< HEAD

@@ -246,6 +246,7 @@ The following tables lists the configurable parameters of the Agones chart and t
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 {{% feature publishVersion="1.10.0" %}}
 =======
 {{% feature publishVersion="1.6.0" %}}
@@ -256,6 +257,9 @@ The following tables lists the configurable parameters of the Agones chart and t
 =======
 {{% feature publishVersion="1.8.0" %}}
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+{{% feature publishVersion="1.9.0" %}}
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
 **New Configuration Features:**
 
 | Parameter                                           | Description                                                                                     | Default                |

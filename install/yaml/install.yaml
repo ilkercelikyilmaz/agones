@@ -9,10 +9,14 @@ metadata:
   labels:
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 ---
@@ -37,6 +41,7 @@ metadata:
   namespace: agones-system
   labels:
     app: agones
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -114,6 +119,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 ---
@@ -141,6 +149,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -151,6 +160,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 ---
@@ -163,10 +175,14 @@ metadata:
   labels:
     app: agones-manual
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: "agones-1.10.0-dev"
 =======
     chart: "agones-1.7.0"
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: "agones-1.8.0"
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: "agones-manual"
     heritage: "Helm"
 type: Opaque
@@ -185,10 +201,14 @@ metadata:
 <<<<<<< HEAD
     app: agones-manual
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: "agones-1.10.0-dev"
 =======
     chart: "agones-1.7.0"
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: "agones-1.8.0"
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: "agones-manual"
     heritage: "Helm"
 data:
@@ -223,10 +243,14 @@ metadata:
 <<<<<<< HEAD
     app: agones-manual
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: "agones-1.10.0-dev"
 =======
     chart: "agones-1.7.0"
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: "agones-1.8.0"
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: "agones-manual"
     heritage: "Helm"
 data:
@@ -261,10 +285,14 @@ metadata:
   labels:
     app: agones-manual
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: "agones-1.10.0-dev"
 =======
     chart: "agones-1.7.0"
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: "agones-1.8.0"
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: "agones-manual"
     heritage: "Helm"
 data:
@@ -295,6 +323,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -305,6 +334,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -543,6 +575,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -553,6 +586,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -640,6 +676,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -650,6 +687,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -854,6 +894,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -864,6 +905,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
   name: gameserverallocationpolicies.multicluster.agones.dev
@@ -961,6 +1005,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -971,6 +1016,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -1235,10 +1283,14 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 rules:
@@ -1398,6 +1450,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -1408,6 +1461,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 rules:
@@ -1456,6 +1512,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -1466,6 +1523,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 rules:
@@ -1488,6 +1548,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -1498,6 +1559,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 subjects:
@@ -1519,10 +1583,14 @@ metadata:
 <<<<<<< HEAD
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 subjects:
@@ -1603,10 +1671,14 @@ metadata:
   labels:
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 subjects:
@@ -1629,10 +1701,14 @@ metadata:
     component: ping
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -1667,10 +1743,14 @@ metadata:
     component: ping
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -1716,10 +1796,14 @@ metadata:
     agones.dev/role: controller
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -1757,10 +1841,14 @@ metadata:
     component: allocator
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -1850,6 +1938,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -1860,6 +1949,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -1905,6 +1997,7 @@ spec:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
         image: "gcr.io/agones-images/agones-controller:1.10.0-dev"
 =======
         image: "gcr.io/agones-images/agones-controller:1.5.0"
@@ -1915,6 +2008,9 @@ spec:
 =======
         image: "gcr.io/agones-images/agones-controller:1.7.0"
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+        image: "gcr.io/agones-images/agones-controller:1.8.0"
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
         imagePullPolicy: IfNotPresent
         env:
         # minimum port that can be exposed to GameServer traffic
@@ -1924,6 +2020,7 @@ spec:
         - name: MAX_PORT
           value: "8000"
         - name: SIDECAR_IMAGE # overwrite the GameServer sidecar image that is used
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -1937,6 +2034,9 @@ spec:
 =======
           value: "gcr.io/agones-images/agones-sdk:1.7.0"
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+          value: "gcr.io/agones-images/agones-sdk:1.8.0"
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
         - name: ALWAYS_PULL_SIDECAR # set the sidecar imagePullPolicy to Always
           value: "false"
         - name: SIDECAR_CPU_REQUEST
@@ -2028,6 +2128,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -2038,6 +2139,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -2075,6 +2179,7 @@ spec:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
           image: "gcr.io/agones-images/agones-ping:1.10.0-dev"
 =======
           image: "gcr.io/agones-images/agones-ping:1.5.0"
@@ -2085,6 +2190,9 @@ spec:
 =======
           image: "gcr.io/agones-images/agones-ping:1.7.0"
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+          image: "gcr.io/agones-images/agones-ping:1.8.0"
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -2167,10 +2275,14 @@ spec:
       containers:
       - name: agones-allocator
 <<<<<<< HEAD
+<<<<<<< HEAD
         image: "gcr.io/agones-images/agones-allocator:1.10.0-dev"
 =======
         image: "gcr.io/agones-images/agones-allocator:1.7.0"
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+        image: "gcr.io/agones-images/agones-allocator:1.8.0"
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
         imagePullPolicy: IfNotPresent
         livenessProbe:
           httpGet:
@@ -2234,10 +2346,14 @@ metadata:
     component: controller
     app: agones
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 spec:
@@ -2305,6 +2421,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -2315,6 +2432,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 webhooks:
@@ -2357,6 +2477,7 @@ metadata:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chart: agones-1.10.0-dev
 =======
     chart: agones-1.5.0
@@ -2367,6 +2488,9 @@ metadata:
 =======
     chart: agones-1.7.0
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+    chart: agones-1.8.0
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
     release: agones-manual
     heritage: Helm
 webhooks:

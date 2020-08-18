@@ -18,6 +18,7 @@ Check the [Client SDK Documentation]({{< relref "_index.md" >}}) for more detail
 
 Download the source from the [Releases Page](https://github.com/googleforgames/agones/releases)
 or {{< ghlink href="sdks/unreal" >}}directly from GitHub{{< /ghlink >}}.
+<<<<<<< HEAD
 
 ## Resources
 
@@ -39,6 +40,8 @@ A few helpful links for Unreal:
   - as above there are hooks in Game Session that can be used to call into Agones
 - [UE4 Building & Packaging Games](https://docs.unrealengine.com/en-US/Engine/Deployment/BuildOperations/index.html)
   - only building out Unreal game servers / clients, will also need to package into a container
+=======
+>>>>>>> 9e7d797f (Release 1.8.0 (#1760))
 
 ## Getting Started
 
