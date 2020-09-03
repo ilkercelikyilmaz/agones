@@ -180,6 +180,7 @@ func NewFromFlags() (*Framework, error) {
 	}
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	viper.SetDefault(kubeconfigFlag, filepath.Join(usr.HomeDir, ".kube", "config"))
 	viper.SetDefault(gsimageFlag, "gcr.io/agones-images/simple-game-server:0.1")
 =======
@@ -188,6 +189,9 @@ func NewFromFlags() (*Framework, error) {
 	viper.SetDefault(gsimageFlag, "gcr.io/agones-images/udp-server:0.20")
 >>>>>>> d60a566e (E2E Tests for GameServer Player Tracking (#1541))
 =======
+=======
+	viper.SetDefault(kubeconfigFlag, filepath.Join(usr.HomeDir, ".kube", "config"))
+>>>>>>> 53d5424a (GolangCI-lint updating version to 1.30 (#1785))
 	viper.SetDefault(gsimageFlag, "gcr.io/agones-images/udp-server:0.21")
 >>>>>>> 8bdc911b (Flaky: TestGameServerReserve (#1565))
 	viper.SetDefault(pullSecretFlag, "")
