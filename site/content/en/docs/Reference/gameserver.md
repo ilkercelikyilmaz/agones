@@ -10,11 +10,19 @@ description: >
 A full GameServer specification is available below and in the {{< ghlink href="examples/gameserver.yaml" >}}example folder{{< /ghlink >}} for reference :
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 {{% feature expiryVersion="1.5.0" %}}
 =======
 <<<<<<< HEAD
 {{% feature expiryVersion="1.6.0" %}}
 >>>>>>> 3d1eb193 (Release 1.6.0 (#1588))
+=======
+<<<<<<< HEAD
+{{% feature expiryVersion="1.6.0" %}}
+=======
+{{% feature expiryVersion="1.9.0" %}}
+>>>>>>> b466f702 (Website: Update properly to Kubernetes 1.16 (#1813))
+>>>>>>> f6bd81f5 (Website: Update properly to Kubernetes 1.16 (#1813))
 ```yaml
 apiVersion: "agones.dev/v1"
 kind: GameServer
@@ -37,9 +45,19 @@ spec:
     # - "Passthrough" dynamically sets the `containerPort` to the same value as the dynamically selected hostPort.
     #      This will mean that users will need to lookup what port has been opened through the server side SDK.
     portPolicy: Static
+<<<<<<< HEAD
     # [Stage:Beta]
     # [FeatureFlag:ContainerPortAllocation]
     # The name of the container to open the port on. Defaults to the game server container if omitted or empty.
+=======
+<<<<<<< HEAD
+    # (Alpha) the name of the container to open the port on. Defaults to the game server container if omitted or empty.
+=======
+    # [Stage:Beta]
+    # [FeatureFlag:ContainerPortAllocation]
+    # The name of the container to open the port on. Defaults to the game server container if omitted or empty.
+>>>>>>> b466f702 (Website: Update properly to Kubernetes 1.16 (#1813))
+>>>>>>> f6bd81f5 (Website: Update properly to Kubernetes 1.16 (#1813))
     container: simple-udp
     # the port that is being opened on the game server process
     containerPort: 7654
@@ -77,6 +95,11 @@ spec:
     # conflict with other TCP connections.
     grpcPort: 9357
     httpPort: 9358
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+>>>>>>> f6bd81f5 (Website: Update properly to Kubernetes 1.16 (#1813))
   # [Stage:Alpha]
   # [FeatureFlag:PlayerTracking]
   # Players provides the configuration for player tracking features.
@@ -84,6 +107,10 @@ spec:
   # players:
   #   # set this GameServer's initial player capacity
   #   initialCapacity: 10
+<<<<<<< HEAD
+=======
+>>>>>>> b466f702 (Website: Update properly to Kubernetes 1.16 (#1813))
+>>>>>>> f6bd81f5 (Website: Update properly to Kubernetes 1.16 (#1813))
   # Pod template configuration
   # https://v1-16.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#podtemplate-v1-core
   template:
@@ -95,7 +122,12 @@ spec:
     spec:
       containers:
       - name: simple-udp
+<<<<<<< HEAD
         image:  gcr.io/agones-images/udp-server:0.21
+=======
+<<<<<<< HEAD
+        image:  gcr.io/agones-images/udp-server:0.18
+>>>>>>> f6bd81f5 (Website: Update properly to Kubernetes 1.16 (#1813))
         imagePullPolicy: Always
 ```
 {{% /feature %}}
@@ -103,6 +135,13 @@ spec:
 {{% feature publishVersion="1.6.0" %}}
 =======
 >>>>>>> 79881118 (Release 1.6.0 (#1588))
+=======
+        image:  gcr.io/agones-images/udp-server:0.21
+        imagePullPolicy: Always
+```
+{{% /feature %}}
+{{% feature publishVersion="1.9.0" %}}
+>>>>>>> b466f702 (Website: Update properly to Kubernetes 1.16 (#1813))
 ```yaml
 apiVersion: "agones.dev/v1"
 kind: GameServer
@@ -180,6 +219,7 @@ spec:
         image:  gcr.io/agones-images/udp-server:0.21
         imagePullPolicy: Always
 ```
+{{% /feature %}} 
 
 Since Agones defines a new [Custom Resources Definition (CRD)](https://kubernetes.io/docs/concepts/api-extension/custom-resources/) we can define a new resource using the kind `GameServer` with the custom group `agones.dev` and API version `v1`.
 
