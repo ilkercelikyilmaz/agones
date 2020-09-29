@@ -210,14 +210,20 @@ The following tables lists the configurable parameters of the Agones chart and t
 | `agones.ping.http.serviceType`                      | The [Service Type][service] of the HTTP Service                                                 | `LoadBalancer`         |
 | `agones.ping.http.loadBalancerIP`                   | The [Load Balancer IP][loadBalancer] of the HTTP Service load balancer. Only works if the Kubernetes provider supports this option.               | \`\`           |
 | `agones.ping.http.loadBalancerSourceRanges`         | The [Load Balancer SourceRanges][loadBalancer] of the HTTP Service load balancer. Only works if the Kubernetes provider supports this option.     | `[]`         |
+<<<<<<< HEAD
 | `agones.ping.http.annotations`                      | [Annotations][annotations] added to the Agones ping http service                                | `{}`                   |
+=======
+>>>>>>> 3dfa77c3 (Release 1.9.0 (#1835))
 | `agones.ping.udp.expose`                            | Expose the udp ping service via a Service                                                       | `true`                 |
 | `agones.ping.udp.rateLimit`                         | Number of UDP packets the ping service handles per instance, per second, per sender             | `20`                   |
 | `agones.ping.udp.port`                              | The port to expose on the service                                                               | `80`                   |
 | `agones.ping.udp.serviceType`                       | The [Service Type][service] of the UDP Service                                                  | `LoadBalancer`         |
 | `agones.ping.udp.loadBalancerIP`                    | The [Load Balancer IP][loadBalancer] of the UDP Service load balancer. Only works if the Kubernetes provider supports this option.                | \`\`           |
 | `agones.ping.udp.loadBalancerSourceRanges`          | The [Load Balancer SourceRanges][loadBalancer] of the UDP Service load balancer. Only works if the Kubernetes provider supports this option.      | `[]`         |
+<<<<<<< HEAD
 | `agones.ping.udp.annotations`                       | [Annotations][annotations] added to the Agones ping udp service                                 | `{}`                   |
+=======
+>>>>>>> 3dfa77c3 (Release 1.9.0 (#1835))
 | `agones.ping.healthCheck.initialDelaySeconds`       | Initial delay before performing the first probe (in seconds)                                    | `3`                    |
 | `agones.ping.healthCheck.periodSeconds`             | Seconds between every liveness probe (in seconds)                                               | `3`                    |
 | `agones.ping.healthCheck.failureThreshold`          | Number of times before giving up (in seconds)                                                   | `3`                    |
@@ -247,6 +253,7 @@ The following tables lists the configurable parameters of the Agones chart and t
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 {{% feature publishVersion="1.10.0" %}}
 =======
 {{% feature publishVersion="1.6.0" %}}
@@ -260,10 +267,14 @@ The following tables lists the configurable parameters of the Agones chart and t
 =======
 {{% feature publishVersion="1.9.0" %}}
 >>>>>>> 9e7d797f (Release 1.8.0 (#1760))
+=======
+{{% feature publishVersion="1.10.0" %}}
+>>>>>>> 3dfa77c3 (Release 1.9.0 (#1835))
 **New Configuration Features:**
 
 | Parameter                                           | Description                                                                                     | Default                |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------- |
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 | `agones.allocator.allocationTimeout`                | Remote allocation call timeout.                                      | `10s`                  |
@@ -278,6 +289,10 @@ The following tables lists the configurable parameters of the Agones chart and t
 =======
 |                                                     |                                                                                                 |                        |
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
+=======
+|                                                     |                                                                                                 |                        |             
+
+>>>>>>> 3dfa77c3 (Release 1.9.0 (#1835))
 {{% /feature %}}
 
 [toleration]: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/

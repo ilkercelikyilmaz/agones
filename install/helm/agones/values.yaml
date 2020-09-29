@@ -146,6 +146,7 @@ agones:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     tag: 1.10.0-dev
 =======
     tag: 1.5.0
@@ -159,6 +160,9 @@ agones:
 =======
     tag: 1.8.0
 >>>>>>> 9e7d797f (Release 1.8.0 (#1760))
+=======
+    tag: 1.9.0
+>>>>>>> 3dfa77c3 (Release 1.9.0 (#1835))
     controller:
       name: agones-controller
       pullPolicy: IfNotPresent

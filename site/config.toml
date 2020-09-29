@@ -105,10 +105,14 @@ release_version = "1.7.0"
 >>>>>>> eb938386 (Release 1.7.0 (#1680))
 =======
 # current release branch. Never is rc.
-release_branch = "release-1.8.0"
+release_branch = "release-1.9.0"
 # the main version. Never is rc.
+<<<<<<< HEAD
 release_version = "1.8.0"
 >>>>>>> 9e7d797f (Release 1.8.0 (#1760))
+=======
+release_version = "1.9.0"
+>>>>>>> 3dfa77c3 (Release 1.9.0 (#1835))
 
 # example tag
 <<<<<<< HEAD

@@ -4,6 +4,9 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 3dfa77c3 (Release 1.9.0 (#1835))
 ## [v1.9.0](https://github.com/googleforgames/agones/tree/v1.9.0) (2020-09-29)
 
 [Full Changelog](https://github.com/googleforgames/agones/compare/v1.9.0-rc...v1.9.0)

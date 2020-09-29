@@ -2,7 +2,11 @@
 <package >
   <metadata>
     <id>AgonesSDK</id>
+<<<<<<< HEAD
     <version>1.10.0-dev</version>
+=======
+    <version>1.9.0</version>
+>>>>>>> 3dfa77c3 (Release 1.9.0 (#1835))
     <authors>Google LLC</authors>
     <owners>Google LLC</owners>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>

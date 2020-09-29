@@ -28,12 +28,15 @@ The current set of `alpha` and `beta` feature gates are:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 {{% feature publishVersion="1.10.0" %}}
 =======
 >>>>>>> a5e1e34b (Release 1.5.0 (#1473))
 =======
 {{% feature expiryVersion="1.5.0" %}}
 >>>>>>> d3ecd0ea (Player Tracking guide, and GameServer reference. (#1569))
+=======
+>>>>>>> 3dfa77c3 (Release 1.9.0 (#1835))
 | Feature Name | Gate    | Default | Stage | Since |
 |--------------|---------|---------|-------|-------|
 | Example Gate (not in use) | `Example` | Disabled | None | 0.13.0 |
@@ -42,6 +45,7 @@ The current set of `alpha` and `beta` feature gates are:
 | [Player Tracking]({{< ref "/docs/Guides/player-tracking.md" >}}) | `PlayerTracking` | Disabled | `Alpha` | 1.6.0 |
 | [SDK Send GameServer on Watch execution]({{< ref "/docs/Guides/Client SDKs/_index.md#watchgameserverfunctiongameserver" >}}) | `SDKWatchSendOnExecute` | Disabled | `Alpha` | 1.7.0 |
 | Fix for RollingUpdate [Scale down](https://github.com/googleforgames/agones/issues/1625) and additional [details]({{< ref "/docs/Guides/fleet-updates.md#alpha-feature-rollingupdateonready" >}}) | `RollingUpdateOnReady` | Disabled | `Alpha` | 1.9.0 |
+<<<<<<< HEAD
 {{% /feature %}}
 
 {{% feature expiryVersion="1.10.0" %}}
@@ -73,6 +77,8 @@ The current set of `alpha` and `beta` feature gates are:
 | [Player Tracking]({{< ref "/docs/Guides/player-tracking.md" >}}) | `PlayerTracking` | Disabled | `Alpha` | 1.6.0 |
 {{% /feature %}}
 >>>>>>> d3ecd0ea (Player Tracking guide, and GameServer reference. (#1569))
+=======
+>>>>>>> 3dfa77c3 (Release 1.9.0 (#1835))
 
 <sup>*</sup>Multicluster Allocation was started before this process was in place, and therefore does not have a
  feature gate and cannot be disabled.
